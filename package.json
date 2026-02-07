@@ -1,0 +1,26 @@
+{
+  "scripts": {
+    "build": "npm run build",
+    "lint": "eslint --ext .js,.jsx server client/src --fix --ignore-pattern \"server/generated/**\" --ignore-pattern \"client/magazyn-app/**\" --ignore-pattern \"client/src/components/_deprecated/**\"",
+    "lint:client": "eslint --ext .js,.jsx client/src --fix --ignore-pattern \"client/magazyn-app/**\"",
+    "lint:server": "eslint --ext .js server --fix --ignore-pattern \"server/generated/**\"",
+    "format": "prettier --write \"**/*.{js,jsx,json,css,md}\""
+  },
+  "dependencies": {
+    "express-rate-limit": "^8.2.1",
+    "express-validator": "^7.3.0",
+    "helmet": "^8.1.0",
+    "react-icons": "^5.5.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-prettier": "^5.5.4",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "prettier": "^3.7.4",
+    "supertest": "^7.1.4"
+  }
+}

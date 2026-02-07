@@ -1,0 +1,125 @@
+.auth-container {
+  box-sizing: border-box;
+  max-width: 400px;
+  margin: 60px auto;
+  padding: 32px;
+  background-color: #f7f8fa;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(42, 59, 110, 0.08);
+  font-family: 'Inter', Arial, sans-serif;
+}
+
+.auth-container h2 {
+  margin-bottom: 20px;
+  text-align: center;
+  color: #2a3b6e;
+  font-weight: 700;
+}
+
+.auth-container form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-container input {
+  margin-bottom: 0;
+  padding: 12px;
+  font-size: 15px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #f5f6fa;
+  color: #2a3b6e;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.auth-container input:focus {
+  outline: none;
+  border-color: #2a3b6e;
+  box-shadow: 0 0 0 2px #e5e7eb;
+}
+
+.auth-container button {
+  padding: 10px;
+  font-size: 14px;
+  background-color: #2a3b6e;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 8px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(42, 59, 110, 0.08);
+  transition: background-color 0.2s;
+}
+
+.auth-container button.submit:hover {
+  background-color: #1d294f;
+}
+
+.auth-container p {
+  text-align: center;
+  color: #d32f2f;
+  margin-top: 10px;
+}
+
+.auth-container .switch-button {
+  background: none;
+  color: #2a3b6e;
+  border: none;
+  cursor: pointer;
+  margin-top: 8px;
+  text-decoration: underline;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+input.error {
+  border: 2px solid #ff4d4d;
+  background-color: #fff6f6;
+}
+
+.error-text {
+  color: #ff4d4d;
+  font-size: 12px;
+  margin-top: 3px;
+  display: block;
+}
+
+.password-strength {
+  font-size: 12px;
+  margin-top: 5px;
+  font-weight: bold;
+}
+
+.password-strength.Słabe {
+  color: red;
+}
+
+.password-strength.Średnie {
+  color: orange;
+}
+
+.password-strength.Mocne {
+  color: green;
+}
+
+/* Mobile adjustments: make container fit smaller screens and be easily tappable */
+@media (max-width: 640px) {
+  .auth-container {
+    max-width: 95%;
+    margin: 18px auto;
+    padding: 18px;
+    border-radius: 12px;
+  }
+  .auth-container input {
+    padding: 12px;
+    font-size: 16px;
+  }
+  .auth-container button {
+    padding: 12px;
+    font-size: 15px;
+  }
+}

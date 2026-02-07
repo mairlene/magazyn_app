@@ -1,0 +1,25 @@
+
+# Node
+node_modules/
+
+# Keep environment variables out of version control
+.env
+.env.*
+
+# Prisma / generated client artifacts (do NOT ignore prisma/migrations)
+server/generated/
+generated/
+
+# runtime files and logs
+server.pid
+logs/
+server/logs/
+*.log
+
+# uploads
+public/uploads/
+
+# editor
+.vscode/
+.idea/
+

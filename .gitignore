@@ -1,0 +1,98 @@
+ # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# Dependencies
+/node_modules
+/client/node_modules
+/server/node_modules
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+client/coverage/
+server/coverage/
+
+# Production / build output
+/build
+client/build/
+client/dist/
+client/build/
+client/build/**/*
+public/build/
+
+# Client caches and tool artifacts
+client/.cache/
+client/.parcel-cache/
+client/.vite/
+client/.next/
+
+# Misc
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.*
+!/.env.example
+
+# Logs
+logs/
+server/logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Deprecated / backups
+_deprecated/
+**/_deprecated/
+archive/
+**/_deprecated/
+**/_deprecated_backups/
+**/*_backups/
+**/*_backup*/
+client/src/components/_deprecated/
+client/_deprecated_backups/
+server/_deprecated/
+server/_deprecated_backups/
+
+# Local .git backup dirs and ad-hoc backups
+.git-backup*/
+*_backups/
+
+# Prisma generated client and other generated artifacts
+server/generated/
+generated/
+generated/prisma/
+server/generated/
+
+# Public and uploads
+public/
+public/uploads/
+
+# Editor / IDE
+.vscode/
+.idea/
+
+# Node/npm lockfiles
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Runtime PID files (do not track)
+server.pid
+server/server.pid
+
+
+prisma/*.backup
+*.backup
+*.bak
+
+# Build / generated
+client/build/
+server/generated/
+prisma/*.backup
+
+# Ignore local env files for client and server
+client/.env
+server/.env

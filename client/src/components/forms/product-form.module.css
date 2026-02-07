@@ -1,0 +1,41 @@
+/* product-form.module.css */
+.btn-main, .btn-cancel {
+  @apply px-6 py-2 rounded-xl shadow-md font-semibold border transition-colors duration-150 text-base leading-tight h-12 min-h-[3rem] flex items-center justify-center;
+}
+.btn-main {
+  @apply bg-[#2a3b6e] text-white border-[#e5e7eb] tracking-wide hover:bg-[#1d294f] disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed;
+}
+.btn-cancel {
+  @apply bg-[#e5e7eb] text-[#2a3b6e] border-[#d1d5db] hover:bg-[#d1d5db];
+}
+.toast {
+  @apply fixed top-4 left-1/2 -translate-x-1/2 bg-[#2a3b6e] text-white px-6 py-3 rounded-xl shadow-lg z-50 text-base font-semibold border border-[#e5e7eb] animate-fadein;
+}
+.form-row {
+  @apply flex flex-row flex-wrap items-end gap-4 overflow-x-auto;
+}
+@media (max-width: 640px) {
+  .form-row {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  /* On small screens make the primary (confirm) action full-width for easier tapping,
+     but keep the cancel button compact so it doesn't wrap to a full row unnecessarily. */
+  .btn-main {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .btn-cancel {
+    width: auto !important;
+    min-width: 0 !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+}
+@keyframes fadein {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fadein {
+  animation: fadein 0.4s;
+}

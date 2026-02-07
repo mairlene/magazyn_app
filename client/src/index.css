@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Mobile-first base adjustments */
+html, body, #root {
+  height: 100%;
+}
+
+/* Ensure buttons and inputs are comfortably tappable on mobile */
+button, input, select, textarea {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Slightly increase base font size on mobile */
+@media (max-width: 640px) {
+  :root {
+    font-size: 15px;
+  }
+  .rounded-xl { border-radius: 0.75rem; }
+  .rounded-md { border-radius: 0.375rem; }
+  .p-4 { padding: 1rem; }
+}
+
+/* Rotate-warning styles omitted; app is responsive in portrait. */
+
+/* UI helpers used by product action buttons */
+.ui-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+/* On md+ screens, prefer left-aligned content and auto width */
+@media (min-width: 768px) {
+  .ui-action-btn {
+    justify-content: flex-start;
+    width: auto;
+  }
+}
+
+.ui-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Component-scoped button styling lives in client/src/components/buttons;
+  keep only base helpers here. */

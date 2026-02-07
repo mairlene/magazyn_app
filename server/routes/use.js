@@ -2,12 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const logger = require('../lib/logger');
 
 // POST /api/use
 router.post('/', async (req, res) => {
   const { productId, warehouseId, quantity, userId, note } = req.body;
   if (!productId || !warehouseId || !quantity || !userId) {
-    console.error('[API /api/use] Missing required fields');
+    logger.error('[API /api/use] Missing required fields');
     return res.status(400).json({ error: 'Missing required fields' });
   }
   try {
@@ -16,7 +17,7 @@ router.post('/', async (req, res) => {
       where: { productId, warehouseId }
     });
     if (!sourceStock || sourceStock.quantity < quantity) {
-      console.error('[API /api/use] Not enough stock in source warehouse');
+      logger.error('[API /api/use] Not enough stock in source warehouse');
       return res.status(400).json({ error: 'Not enough stock in source warehouse' });
     }
     // Remove quantity from source warehouse
@@ -47,7 +48,7 @@ router.post('/', async (req, res) => {
     });
     res.json({ success: true });
   } catch (err) {
-    console.error('[API /api/use] Server error:', err);
+    logger.error('[API /api/use] Server error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

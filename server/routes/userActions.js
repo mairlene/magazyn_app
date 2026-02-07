@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const logger = require('../lib/logger');
 
 // GET /api/user-actions?limit=100
 // Returns recent stockChange records with product, warehouse and user info
@@ -67,7 +68,7 @@ router.get('/', async (req, res) => {
 
     res.json({ success: true, items, total, page, limit });
   } catch (err) {
-    console.error('[API /api/user-actions] Error:', err);
+    logger.error('[API /api/user-actions] Error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

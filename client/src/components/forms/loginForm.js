@@ -21,10 +21,8 @@ function LoginForm({ onLogin, onSwitchToRegister }) {
     });
     const data = await res.json();
     if (data.success) {
-      // Zapisz userId i token do localStorage
-      localStorage.setItem("userId", data.user.id);
-      if (data.token) localStorage.setItem("token", data.token);
-      onLogin(data.user.id);
+      // delegate session persistence to App via onLogin
+      onLogin({ id: data.user.id, token: data.token });
     } else {
       setMessage(data.error || "Błąd logowania");
     }

@@ -2,17 +2,20 @@ import React, { useState, useRef } from "react";
 import UploadFileForm from "../../forms/uploadFileForm";
 import InfoBubble from "./InfoBubble";
 import ConfirmDuplicateModal from './ConfirmDuplicateModal';
+import ConfirmCreateWarehouseModal from './ConfirmCreateWarehouseModal';
 import { parseExcelFile } from "../../utils/excelImporter";
-import { BASE } from '../../../services/api';
+import { BASE, getAuthHeaders } from '../../../services/api';
 import { useToast } from '../../common/ToastContext';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 
-export default function ImportExcelView({ onBack, onRefresh }) {
+export default function ImportExcelView({ onBack, onRefresh, token = null, userId: propUserId = null }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileName, setFileName] = useState("");
   const [, setImportedRows] = useState([]);
   const [, setProcessingIndex] = useState(-1);
   const [currentDuplicateRow, setCurrentDuplicateRow] = useState(null);
+  const [currentMissingWarehouse, setCurrentMissingWarehouse] = useState(null);
+  const [onMissingDecision, setOnMissingDecision] = useState(null);
   const [processingLoading, setProcessingLoading] = useState(false);
   const { showToast } = useToast();
 
@@ -29,17 +32,26 @@ export default function ImportExcelView({ onBack, onRefresh }) {
   const handleImportConfirm = async () => {
     if (!selectedFile) return;
     try {
-      const userId = localStorage.getItem('userId');
+      const userId = propUserId || localStorage.getItem('userId');
       if (!userId) throw new Error('Brak zalogowanego użytkownika (userId). Zaloguj się ponownie.');
       const rows = await parseExcelFile(selectedFile);
       setImportedRows(rows);
       setProcessingIndex(0);
+
+      // Note: process rows one-by-one; when encountering a missing warehouse
+      // the server will respond with { status: 'missingWarehouse', warehouseName }
+      // and we will prompt the user via modal to create or skip that warehouse.
+      // Note: types will be created automatically on the server when missing.
+
       for (let i = 0; i < rows.length; i++) {
         setProcessingLoading(true);
         const row = rows[i];
-        const detectRes = await fetch(`${BASE}/api/products/import-row`, {
+        const wname = (row.Magazyn || '').toString().trim();
+
+        // Try importing this single row. Server will return 'missingWarehouse' when appropriate.
+        let detectRes = await fetch(`${BASE}/api/products/import-row`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders(token) },
           body: JSON.stringify({ row, userId }),
         });
         if (!detectRes.ok) {
@@ -47,11 +59,45 @@ export default function ImportExcelView({ onBack, onRefresh }) {
           throw new Error(txt || 'Błąd serwera podczas przetwarzania wiersza');
         }
         const detectBody = await detectRes.json();
+
+        // If warehouse is missing, ask user whether to create it; if created, retry this row.
+        if (detectBody && detectBody.status === 'missingWarehouse') {
+          // Ask user
+          setCurrentMissingWarehouse(detectBody.warehouseName || wname || '');
+          await new Promise((resolve) => {
+            const resolver = async (decision, applyAll) => {
+              // decision: 'create' or 'skip'
+              try {
+                if (decision === 'create') {
+                  // Instead of calling admin endpoint, ask server to create the warehouse
+                  // by retrying import-row with options.createWarehouses === true.
+                  const retryRes = await fetch(`${BASE}/api/products/import-row`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...getAuthHeaders(token) },
+                    body: JSON.stringify({ row, userId, options: { createWarehouses: true } }),
+                  });
+                  if (!retryRes.ok) {
+                    const txt = await retryRes.text().catch(() => null);
+                    throw new Error(txt || 'Błąd przy ponownym przetwarzaniu wiersza');
+                  }
+                }
+              } finally {
+                resolve();
+              }
+            };
+            setOnMissingDecision(() => resolver);
+          });
+          setCurrentMissingWarehouse(null);
+          setProcessingLoading(false);
+          setProcessingIndex(i + 1);
+          continue;
+        }
+
         if (detectBody.status === 'duplicate') {
           if (applyAllDecisionRef.current) {
             await fetch(`${BASE}/api/products/import-row`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', ...getAuthHeaders(token) },
               body: JSON.stringify({ row, userId, confirmAction: applyAllDecisionRef.current === 'increase' ? 'increase' : 'reject' }),
             });
           } else {
@@ -137,16 +183,31 @@ export default function ImportExcelView({ onBack, onRefresh }) {
             setApplyAllDecision(decision === 'increase' ? 'increase' : 'reject');
             applyAllDecisionRef.current = decision === 'increase' ? 'increase' : 'reject';
           }
-          const userId = localStorage.getItem('userId');
-          await fetch(`${BASE}/api/products/import-row`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ row: currentDuplicateRow, userId, confirmAction: decision === 'increase' ? 'increase' : 'reject' }),
-          });
+              const userId = propUserId || localStorage.getItem('userId');
+              await fetch(`${BASE}/api/products/import-row`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders(token) },
+                body: JSON.stringify({ row: currentDuplicateRow, userId, confirmAction: decision === 'increase' ? 'increase' : 'reject' }),
+              });
           setCurrentDuplicateRow(null);
           if (typeof importRowResolverRef.current === 'function') {
             importRowResolverRef.current();
             importRowResolverRef.current = null;
+          }
+        }}
+      />
+
+      <ConfirmCreateWarehouseModal
+        name={currentMissingWarehouse}
+        loading={processingLoading}
+        onDecision={async (decision, applyAll) => {
+          try {
+            if (typeof onMissingDecision === 'function') {
+              onMissingDecision(decision === 'create' ? 'create' : 'skip', applyAll);
+            }
+          } finally {
+            // clear temporary resolver handler
+            setOnMissingDecision(null);
           }
         }}
       />

@@ -23,7 +23,8 @@ export default function MassActionBar({
   if (!selectedCount) return null;
 
   const label = (confirmLabel || '').toString().toLowerCase();
-  const Icon = label.includes('wykorz')
+  // treat Polish 'pobierz' (and english 'use') as download action
+  const Icon = label.includes('pob') || label === 'use'
     ? VerticalAlignBottomOutlinedIcon
     : (label.includes('przen') ? SwapHorizIcon : CheckIcon);
 
@@ -62,21 +63,21 @@ export default function MassActionBar({
           </div>
         )}
 
-        {/* note input for 'use' (wykorzystaj) action */}
-        {label.includes('wykorz') && (
+        {/* note input for 'use' / 'pobierz' action */}
+        {label.includes('pob') || label === 'use' ? (
           <div className="mb-3">
             <div className="flex items-center gap-3">
               <label className="font-semibold text-sm">Opis</label>
               <input
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder={"opis dot. zużycia produktów (np. adres)"}
+                placeholder={"opis dot. pobierania produktów (np. adres dostawy)"}
                 className="ml-2 px-3 py-2 wrap rounded-xl border bg-white text-sm flex-1"
-                aria-label="Opis zużycia"
+                aria-label="Opis pobierania"
               />
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* main row */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-4">

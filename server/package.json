@@ -8,7 +8,8 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "generate-thumbs": "node scripts/generate-thumbs.js",
-    "normalize-image-urls": "node scripts/normalize-image-urls.js"
+    "normalize-image-urls": "node scripts/normalize-image-urls.js",
+    "normalize-use-type": "node scripts/normalize-use-type.js"
   },
   "keywords": [],
   "author": "",
@@ -33,6 +34,9 @@
     "multer": "^2.0.2",
     "node-fetch": "^2.6.7",
     "sharp": "^0.32.0"
+    ,
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^4.6.2"
   },
   "devDependencies": {
     "nodemon": "^3.1.10",

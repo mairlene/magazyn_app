@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { BASE, resolveImageUrl } from '../../services/api';
+import { BASE, resolveImageUrl, getAuthHeaders } from '../../services/api';
 import formatError from '../../utils/formatError';
 import { useToast } from '../common/ToastContext';
 
-export default function ArchiveView({ user, userId }) {
+export default function ArchiveView({ user, userId, token = null }) {
   const [archivedProducts, setArchivedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -21,7 +21,7 @@ export default function ArchiveView({ user, userId }) {
       try {
         const res = await fetch(`${BASE}/api/archive/by-user`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...getAuthHeaders(token) },
           body: JSON.stringify({ userId, page, limit }),
         });
         const data = await res.json();
@@ -40,7 +40,7 @@ export default function ArchiveView({ user, userId }) {
     }
     if (userId) fetchArchive();
     return () => { cancelled = true; };
-  }, [userId, user, page, limit]);
+  }, [userId, user, page, limit, token]);
 
   const handleRestore = async (item) => {
     setError("");
@@ -48,7 +48,7 @@ export default function ArchiveView({ user, userId }) {
     try {
       const res = await fetch(`${BASE}/api/archive/restore`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders(token) },
         body: JSON.stringify({ archiveId: item.id, userId: userId }),
       });
       const data = await res.json();

@@ -3,6 +3,7 @@ const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const prisma = new PrismaClient();
+const logger = require('../lib/logger');
 
 // Protect all admin routes: require authenticated admin user
 router.use(authMiddleware, requireRole('admin'));
@@ -10,8 +11,23 @@ router.use(authMiddleware, requireRole('admin'));
 // GET /api/admin/users
 router.get('/users', async (req, res) => {
   try {
-    const users = await prisma.user.findMany({});
-    res.json({ users });
+    const pageRaw = req.query.page ?? null;
+    const limitRaw = req.query.limit ?? null;
+    const page = pageRaw ? Math.max(1, Number(pageRaw)) : null;
+    const requestedLimit = limitRaw ? Math.max(1, Number(limitRaw)) : null;
+    const DEFAULT_LIMIT = 100;
+    const MAX_LIMIT = 1000;
+    const limit = requestedLimit ? Math.min(requestedLimit, MAX_LIMIT) : DEFAULT_LIMIT;
+
+    if (page) {
+      const total = await prisma.user.count();
+      const users = await prisma.user.findMany({ skip: (page - 1) * limit, take: limit });
+      return res.json({ users, total, page, limit });
+    }
+
+    // no page requested -> return safe default slice and indicate truncation
+    const users = await prisma.user.findMany({ take: limit });
+    return res.json({ users, limit, truncated: users.length === limit });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -48,32 +64,36 @@ router.post('/update-warehouse', async (req, res) => {
   try {
     const target = await prisma.warehouse.findFirst({ where: { name: newName } });
     // jeśli istnieje magazyn o docelowej nazwie i to nie ten sam rekord -> zwróć konflikty
-    if (target && target.id !== Number(id)) {
+      if (target && target.id !== Number(id)) { 
       const sourceId = Number(id);
       const targetId = target.id;
       // pobierz stany magazynowe z magazynu źródłowego wraz z informacjami o produkcie
-      const sourceStocks = await prisma.stock.findMany({ where: { warehouseId: sourceId }, include: { product: true } });
+      // Find potential conflicts but limit the number reviewed to avoid huge memory use
+      const MAX_CONFLICTS = 500;
+      const sourceStocksPreview = await prisma.stock.findMany({ where: { warehouseId: sourceId }, include: { product: true }, take: MAX_CONFLICTS });
       const conflicts = [];
-      for (const s of sourceStocks) {
+      for (const s of sourceStocksPreview) {
         const tgt = await prisma.stock.findFirst({ where: { warehouseId: targetId, productId: s.productId } });
         if (tgt) {
           conflicts.push({
             productId: s.productId,
-            name: s.product.name,
-            size: s.product.size,
+            name: s.product?.name || null,
+            size: s.product?.size || null,
             sourceQuantity: s.quantity,
             targetQuantity: tgt.quantity
           });
         }
       }
-      return res.status(409).json({ error: 'Istnieje magazyn o takiej nazwie', conflict: true, targetId, conflicts });
+      // Indicate if we truncated the preview
+      const truncated = sourceStocksPreview.length >= MAX_CONFLICTS;
+      return res.status(409).json({ error: 'Istnieje magazyn o takiej nazwie', conflict: true, targetId, conflicts, truncated });
     }
 
     // brak kolizji nazwy -> zwykła aktualizacja
-    const updated = await prisma.warehouse.update({ where: { id: Number(id) }, data: { name: newName } });
+      const updated = await prisma.warehouse.update({ where: { id: Number(id) }, data: { name: newName } }); 
     res.json({ success: true, warehouse: updated });
   } catch (err) {
-    console.error('[ADMIN] update-warehouse error:', err);
+    logger.error('[ADMIN] update-warehouse error:', err);
     res.status(500).json({ error: 'Błąd aktualizacji magazynu' });
   }
 });
@@ -93,30 +113,33 @@ router.post('/merge-warehouses', async (req, res) => {
     const targetWarehouse = await prisma.warehouse.findUnique({ where: { id: tId } });
     if (!sourceWarehouse || !targetWarehouse) return res.status(404).json({ error: 'Nie znaleziono magazynów' });
 
-    const sourceStocks = await prisma.stock.findMany({ where: { warehouseId: sId } });
-
-    for (const stock of sourceStocks) {
-      const tgt = await prisma.stock.findFirst({ where: { warehouseId: tId, productId: stock.productId } });
-      if (tgt) {
-        // zwiększ ilość w magazynie docelowym
-        await prisma.stock.update({ where: { id: tgt.id }, data: { quantity: tgt.quantity + stock.quantity } });
-        // usuń zapis ze starego magazynu
-        await prisma.stock.delete({ where: { id: stock.id } });
-        // zapisz zmianę (transfer/merge)
-        await prisma.stockChange.create({ data: { type: 'transfer', quantity: stock.quantity, productId: stock.productId, warehouseId: tId, userId: Number(userId) } });
-      } else {
-        // przenieś rekord stock do innego magazynu (zmiana warehouseId)
-        await prisma.stock.update({ where: { id: stock.id }, data: { warehouseId: tId } });
-        await prisma.stockChange.create({ data: { type: 'transfer', quantity: stock.quantity, productId: stock.productId, warehouseId: tId, userId: Number(userId) } });
+    // Process source stocks in batches to avoid loading all rows into memory
+    const BATCH_SIZE = 200;
+    let lastId = 0;
+    while (true) {
+      const batch = await prisma.stock.findMany({ where: { warehouseId: sId, id: { gt: lastId } }, take: BATCH_SIZE, orderBy: { id: 'asc' } });
+      if (!batch || batch.length === 0) break;
+      for (const stock of batch) {
+        const tgt = await prisma.stock.findFirst({ where: { warehouseId: tId, productId: stock.productId } });
+        if (tgt) {
+          await prisma.stock.update({ where: { id: tgt.id }, data: { quantity: tgt.quantity + stock.quantity } });
+          await prisma.stock.delete({ where: { id: stock.id } });
+          await prisma.stockChange.create({ data: { type: 'transfer', quantity: stock.quantity, productId: stock.productId, warehouseId: tId, userId: Number(userId) } });
+        } else {
+          await prisma.stock.update({ where: { id: stock.id }, data: { warehouseId: tId } });
+          await prisma.stockChange.create({ data: { type: 'transfer', quantity: stock.quantity, productId: stock.productId, warehouseId: tId, userId: Number(userId) } });
+        }
+        lastId = stock.id;
       }
+      if (batch.length < BATCH_SIZE) break;
     }
 
     // po przeniesieniu stocków, usuń pusty magazyn źródłowy
-    await prisma.warehouse.delete({ where: { id: sId } });
+      await prisma.warehouse.delete({ where: { id: sId } }); 
 
     res.json({ success: true, message: 'Magazyny scalone pomyślnie' });
   } catch (err) {
-    console.error('[ADMIN] merge-warehouses error:', err);
+    logger.error('[ADMIN] merge-warehouses error:', err);
     res.status(500).json({ error: 'Błąd scalania magazynów' });
   }
 });
@@ -161,14 +184,14 @@ router.post('/delete-warehouse', async (req, res) => {
       ]);
       res.json({ success: true, warning: 'Usunięto powiązane historyczne rekordy (transfery/logi/archiwum/koszyk) przed usunięciem magazynu.' });
     } catch (delErr) {
-      console.error('[ADMIN] delete-warehouse delete error:', delErr);
+      logger.error('[ADMIN] delete-warehouse delete error:', delErr);
       if (delErr && delErr.code) {
         return res.status(500).json({ error: delErr.message, code: delErr.code });
       }
       return res.status(500).json({ error: 'Błąd usuwania magazynu' });
     }
   } catch (err) {
-    console.error('[ADMIN] delete-warehouse error:', err);
+    logger.error('[ADMIN] delete-warehouse error:', err);
     res.status(500).json({ error: 'Błąd usuwania magazynu' });
   }
 });
@@ -190,7 +213,7 @@ router.post('/update-type', async (req, res) => {
     await prisma.product.updateMany({ where: { type: oldType }, data: { type: newType } });
     res.json({ success: true });
   } catch (err) {
-    console.error('[ADMIN] update-type error:', err);
+    logger.error('[ADMIN] update-type error:', err);
     res.status(500).json({ error: 'Błąd aktualizacji typu' });
   }
 });
@@ -207,7 +230,7 @@ router.post('/delete-type', async (req, res) => {
     await prisma.type.delete({ where: { id: found.id } });
     res.json({ success: true });
   } catch (err) {
-    console.error('[ADMIN] delete-type error:', err);
+    logger.error('[ADMIN] delete-type error:', err);
     res.status(500).json({ error: 'Błąd usuwania typu' });
   }
 });
@@ -225,7 +248,7 @@ router.post('/create-warehouse', async (req, res) => {
     const created = await prisma.warehouse.create({ data: { name: newName } });
     res.json({ success: true, warehouse: created });
   } catch (err) {
-    console.error('[ADMIN] create-warehouse error:', err);
+    logger.error('[ADMIN] create-warehouse error:', err);
     res.status(500).json({ error: 'Błąd tworzenia magazynu' });
   }
 });
@@ -241,7 +264,7 @@ router.post('/create-type', async (req, res) => {
     const created = await prisma.type.create({ data: { name: trimmed } });
     res.json({ success: true, type: created });
   } catch (err) {
-    console.error('[ADMIN] create-type error:', err);
+    logger.error('[ADMIN] create-type error:', err);
     res.status(500).json({ error: 'Błąd tworzenia typu' });
   }
 });

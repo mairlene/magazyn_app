@@ -6,6 +6,7 @@ const { signJwt } = require('../utils/jwt');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const { check, validationResult } = require('express-validator');
 const prisma = new PrismaClient();
+const logger = require('../lib/logger');
 
 // POST /api/auth/get-user
 // Protect this endpoint with token-based auth: it will return the user based on the JWT payload
@@ -18,7 +19,7 @@ router.post("/get-user", authMiddleware, async (req, res) => {
     if (!user) return res.status(404).json({ success: false, error: "Nie znaleziono użytkownika" });
     res.json({ success: true, user: { id: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: user.avatarUrl, userWarehouse: user.userWarehouse } });
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ success: false, error: "Błąd pobierania użytkownika" });
   }
 });
@@ -47,7 +48,7 @@ router.post(
       const user = await prisma.user.create({ data: { email, password: hash, name: defaultName, role } });
       res.json({ success: true, user: { id: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: user.avatarUrl } });
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       res.status(500).json({ success: false, error: "Błąd rejestracji. Spróbuj ponownie." });
     }
   }
@@ -74,11 +75,47 @@ router.post("/update-profile", authMiddleware, async (req, res) => {
     });
     res.json({ success: true, user: { id: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: user.avatarUrl, userWarehouse: user.userWarehouse } });
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ success: false, error: "Błąd aktualizacji profilu" });
   }
 });
 
+/**
+ * @openapi
+ * /api/auth/login:
+ *   post:
+ *     summary: Authenticate user and return JWT
+ *     tags:
+ *       - auth
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Authentication result with token on success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 token:
+ *                   type: string
+ *                 user:
+ *                   type: object
+ *       400:
+ *         description: Validation errors
+ */
 // POST /api/auth/login
 router.post(
   "/login",
@@ -105,7 +142,7 @@ router.post(
     const token = signJwt({ id: user.id, email: user.email, role: user.role });
     res.json({ success: true, token, user: { id: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: user.avatarUrl, userWarehouse: user.userWarehouse } });
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(200).json({ success: false, error: "Błąd logowania. Spróbuj ponownie." });
   }
 });
@@ -155,7 +192,7 @@ router.post(
     });
     res.json({ success: true });
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ success: false, message: "Błąd zmiany hasła" });
   }
 });
@@ -163,20 +200,34 @@ router.post(
 // GET /api/auth/users - lista użytkowników (tylko dla admina)
 router.get("/users", authMiddleware, requireRole("admin"), async (req, res) => {
   try {
-    const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        avatarUrl: true,
-        userWarehouse: true,
-        createdAt: true
-      }
-    });
-    res.json({ success: true, users });
+    const pageRaw = req.query.page ?? null;
+    const limitRaw = req.query.limit ?? null;
+    const page = pageRaw ? Math.max(1, Number(pageRaw)) : null;
+    const requestedLimit = limitRaw ? Math.max(1, Number(limitRaw)) : null;
+    const DEFAULT_LIMIT = 100;
+    const MAX_LIMIT = 1000;
+    const limit = requestedLimit ? Math.min(requestedLimit, MAX_LIMIT) : DEFAULT_LIMIT;
+
+    const select = {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      avatarUrl: true,
+      userWarehouse: true,
+      createdAt: true
+    };
+
+    if (page) {
+      const total = await prisma.user.count();
+      const users = await prisma.user.findMany({ skip: (page - 1) * limit, take: limit, select });
+      return res.json({ success: true, users, total, page, limit });
+    }
+
+    const users = await prisma.user.findMany({ take: limit, select });
+    return res.json({ success: true, users, limit, truncated: users.length === limit });
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ success: false, error: "Błąd pobierania użytkowników" });
   }
 });
@@ -192,7 +243,7 @@ router.post("/update-role", authMiddleware, requireRole("admin"), async (req, re
     });
     res.json({ success: true, user });
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ success: false, error: "Błąd zmiany roli" });
   }
 });

@@ -1,9 +1,9 @@
-// DEPRECATED: stock update endpoint. Client currently updates stocks via
-// product edit flows (PUT /api/products/:id) — verify usage before removing.
+// Endpoint to set or create stock for a product in a warehouse
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const logger = require('../lib/logger');
 
 // POST /api/stock/update - set or create stock for product in warehouse
 router.post('/update', async (req, res) => {
@@ -31,7 +31,7 @@ router.post('/update', async (req, res) => {
 
     res.json({ success: true, stock });
   } catch (e) {
-    console.error('[API /api/stock/update] Error:', e);
+    logger.error('[API /api/stock/update] Error:', e);
     res.status(500).json({ error: 'Server error' });
   }
 });

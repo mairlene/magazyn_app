@@ -2,14 +2,20 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
+import { BrowserRouter } from 'react-router-dom';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <App />
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
   </React.StrictMode>
 );
-// On load: check build fingerprint and (if changed) clear caches/old SW to avoid stale assets causing blank screens.
+// Production-safe: minimal SW/cache cleanup helper.
+// This helper unregisters service workers and removes caches, but does NOT
+// delete localStorage or IndexedDB. That avoids accidental data loss while
+// still ensuring the browser will fetch fresh assets after reload.
 async function unregisterSWsAndClearCaches() {
   try {
     if ('serviceWorker' in navigator) {
@@ -22,116 +28,90 @@ async function unregisterSWsAndClearCaches() {
   try {
     if ('caches' in window) {
       const keys = await caches.keys();
-      await Promise.all(keys.map(k => caches.delete(k)));
+      // Remove only caches we can delete; let unknown caches be removed conservatively.
+      await Promise.all(keys.map(k => caches.delete(k).catch(() => {})));
     }
   } catch (err) {
     // cache clear failed
   }
-  // Try to remove IndexedDB databases (if supported) - best effort
-  try {
-    if ('indexedDB' in window && indexedDB.databases) {
-      const dbs = await indexedDB.databases();
-      await Promise.all(dbs.map(db => new Promise(res => {
-        const req = indexedDB.deleteDatabase(db.name);
-        req.onsuccess = req.onerror = req.onblocked = () => res();
-      })));
-    }
-  } catch (err) {
-    // indexedDB cleanup failed
-  }
 }
 
 async function ensureFreshBuildThenRegisterSW() {
+  // Only run complex logic in production builds
+  if (process.env.NODE_ENV !== 'production') {
+    // still attempt to register SW in non-production for testing, but keep it soft
+    try {
+      if ('serviceWorker' in navigator) {
+        const res = await fetch('/service-worker.js', { method: 'HEAD' }).catch(() => null);
+        if (res && res.ok) navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+      }
+    } catch (err) {}
+    return;
+  }
+
   try {
-    // Try to find the build's main JS file by fetching index.html (no-cache) and extracting the main.<hash>.js path.
+    // Prefer asset-manifest.json (CRA) which lists current built files.
     let fingerprint = null;
     try {
-      const htmlResp = await fetch('/index.html', { method: 'GET', cache: 'no-cache' });
-      if (htmlResp && htmlResp.ok) {
-        const html = await htmlResp.text();
-        const m = html.match(/\/(static\/js\/main\.[^"']+\.js)/);
-        const mainPath = m && m[1] ? '/' + m[1] : null;
-        if (mainPath) {
-          try {
-            const head = await fetch(mainPath, { method: 'HEAD', cache: 'no-cache' });
-            if (head && head.ok) {
-              fingerprint = head.headers.get('etag') || head.headers.get('last-modified') || head.headers.get('x-amz-version-id') || head.headers.get('content-length') || null;
-            }
-          } catch (err) {
-            console.warn('HEAD for main js failed', err);
-          }
-        }
+      const resp = await fetch('/asset-manifest.json', { cache: 'no-cache' });
+      if (resp && resp.ok) {
+        const json = await resp.json();
+        // simple fingerprint string: JSON of files object (not cryptographically strong but sufficient)
+        fingerprint = JSON.stringify(json.files || json);
       }
     } catch (err) {
-      // index.html fetch failed
-    }
-
-    // Fallback to manifest.json if we didn't get a fingerprint from main.*.js
-    if (!fingerprint) {
+      // asset-manifest not available; fall back to manifest.json HEAD
       try {
         const head = await fetch('/manifest.json', { method: 'HEAD', cache: 'no-cache' });
         if (head && head.ok) {
-          fingerprint = head.headers.get('etag') || head.headers.get('last-modified') || head.headers.get('x-amz-version-id') || head.headers.get('content-length') || null;
+          fingerprint = head.headers.get('etag') || head.headers.get('last-modified') || null;
         }
-      } catch (err) {
-        // manifest head failed
-      }
+      } catch (e) {}
     }
 
     const prev = localStorage.getItem('app:assetFingerprint');
-    const didCleanup = localStorage.getItem('app:didCleanup');
-    if (fingerprint && prev && prev !== fingerprint && !didCleanup) {
-      // preserve minimal auth info, clear the rest
-      const preserved = { token: localStorage.getItem('token'), userId: localStorage.getItem('userId') };
-      await unregisterSWsAndClearCaches();
-      // Clear localStorage except preserved keys
-      Object.keys(localStorage).forEach(k => {
-        if (!['token', 'userId'].includes(k)) localStorage.removeItem(k);
-      });
-      if (preserved.token) localStorage.setItem('token', preserved.token);
-      if (preserved.userId) localStorage.setItem('userId', preserved.userId);
-      localStorage.setItem('app:didCleanup', '1');
-      localStorage.setItem('app:assetFingerprint', fingerprint);
-      // reload so the client fetches fresh assets
-      window.location.reload();
-      return; // don't continue to register SW in this run
-    }
-    if (fingerprint && (!prev || prev !== fingerprint)) {
+    if (fingerprint && prev && prev !== fingerprint) {
+      try {
+        window.dispatchEvent(new CustomEvent('app:update-available', { detail: { fingerprint } }));
+      } catch (e) {
+        localStorage.setItem('app:updateAvailable', fingerprint);
+      }
+      // do not overwrite stored fingerprint until user accepts update
+    } else if (fingerprint && (!prev || prev !== fingerprint)) {
       localStorage.setItem('app:assetFingerprint', fingerprint);
     }
   } catch (err) {
     // fingerprint detection failed
   }
 
-  // Register service worker for simple offline support, only if file exists
-  if ('serviceWorker' in navigator) {
-    try {
-      const res = await fetch('/service-worker.js', { method: 'HEAD' });
-      if (res.ok) {
-        navigator.serviceWorker.register('/service-worker.js').catch(() => {});
-      } else {
-        // no service-worker
-      }
-    } catch (err) {
-      // service-worker check failed
+  // Register service worker if present.
+  try {
+    if ('serviceWorker' in navigator) {
+      const res = await fetch('/service-worker.js', { method: 'HEAD' }).catch(() => null);
+      if (res && res.ok) navigator.serviceWorker.register('/service-worker.js').catch(() => {});
     }
-  }
+  } catch (err) {}
 }
 
-window.addEventListener('load', () => {
-  // run but do not block rendering; function may reload the page when cleaning caches
-  // ONE-TIME DEPLOY FIX: forcefully unregister any service workers and clear caches
-  // to avoid stale SW serving old assets after deploy. Remove this block after one successful deploy.
-  (async () => {
+// Expose a function the UI can call to run the cleanup + reload on user confirmation.
+window.appDoCleanup = async function appDoCleanup() {
+  try {
+    await unregisterSWsAndClearCaches();
+    // Set a flag so next load records the new fingerprint (optional)
     try {
-      // Attempt a full cleanup first so the fresh build is loaded reliably
-      await unregisterSWsAndClearCaches();
-    } catch (err) {
-      // don't block registration on cleanup errors
-      console.warn('Forced SW/cache cleanup failed', err);
-    }
-    // Continue with normal registration/checks
-    ensureFreshBuildThenRegisterSW();
-  })();
+      localStorage.setItem('app:didCleanup', '1');
+    } catch (e) {}
+    // reload so the client fetches fresh assets
+    window.location.reload();
+  } catch (err) {
+    console.warn('appDoCleanup failed', err);
+    try { window.location.reload(); } catch (_) {}
+  }
+};
+
+window.addEventListener('load', () => {
+  // Run fingerprint check and register service worker if available.
+  // No automatic destructive cleanup is performed here.
+  ensureFreshBuildThenRegisterSW();
 });
 

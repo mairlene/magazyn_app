@@ -6,7 +6,7 @@ import TabsPills from '../common/TabsPills';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import HistoryIcon from '@mui/icons-material/History';
 
-export default function AdminPanel({ currentUser }) {
+export default function AdminPanel({ currentUser, token = null }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -23,7 +23,7 @@ export default function AdminPanel({ currentUser }) {
   const [activeTab, setActiveTab] = useState('users');
 
   useEffect(() => {
-    fetch(`${BASE}/api/auth/users`, { headers: { ...getAuthHeaders() } })
+    fetch(`${BASE}/api/auth/users`, { headers: { ...getAuthHeaders(token) } })
       .then(res => res.json())
       .then(data => {
         if (data.success) setUsers(data.users);
@@ -41,14 +41,14 @@ export default function AdminPanel({ currentUser }) {
       .then(r => r.json())
       .then(list => setWarehouses(list || []))
       .catch(() => setWarehouses([]));
-  }, []);
+  }, [token]);
 
   // Fetch history when the history tab becomes active
   useEffect(() => {
     let mounted = true;
     if (activeTab === 'history') {
       setHistoryLoading(true);
-      fetch(`${BASE}/api/user-actions?limit=100`)
+      fetch(`${BASE}/api/user-actions?limit=100`, { headers: { ...getAuthHeaders(token) } })
         .then(r => r.json())
         .then(d => {
           if (!mounted) return;
@@ -60,7 +60,7 @@ export default function AdminPanel({ currentUser }) {
         .finally(() => { if (mounted) setHistoryLoading(false); });
     }
     return () => { mounted = false; };
-  }, [activeTab]);
+  }, [activeTab, token]);
   // helper: fetch fresh products and warehouses from backend
   const refreshProductsAndWarehouses = async () => {
     try {
@@ -87,7 +87,7 @@ export default function AdminPanel({ currentUser }) {
     try {
       const res = await fetch(`${BASE}/api/auth/update-role`, {
         method: "POST",
-        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+        headers: { ...getAuthHeaders(token), "Content-Type": "application/json" },
         body: JSON.stringify({ id, role: newRole })
       });
       const result = await res.json();
@@ -118,7 +118,7 @@ export default function AdminPanel({ currentUser }) {
   const handleDeleteType = async (type) => {
     if (!window.confirm(`Na pewno usunąć typ "${type}"?`)) return;
     try {
-  const res = await fetch(`${BASE}/api/admin/delete-type`, { method: 'POST', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ type }) });
+  const res = await fetch(`${BASE}/api/admin/delete-type`, { method: 'POST', headers: { ...getAuthHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ type }) });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error || 'Błąd usuwania typu');
@@ -135,7 +135,7 @@ export default function AdminPanel({ currentUser }) {
   const handleDeleteWarehouse = async (warehouseName) => {
     if (!window.confirm(`Na pewno usunąć magazyn "${warehouseName}"?`)) return;
     try {
-  const res = await fetch(`${BASE}/api/admin/delete-warehouse`, { method: 'POST', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ name: warehouseName }) });
+  const res = await fetch(`${BASE}/api/admin/delete-warehouse`, { method: 'POST', headers: { ...getAuthHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ name: warehouseName }) });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error || 'Błąd usuwania magazynu');
@@ -167,7 +167,7 @@ export default function AdminPanel({ currentUser }) {
     if (trimmed === editType) return cancelEditType();
     setEditLoading(true);
     try {
-  const res = await fetch(`${BASE}/api/admin/update-type`, { method: 'POST', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ oldType: editType, newType: trimmed }) });
+  const res = await fetch(`${BASE}/api/admin/update-type`, { method: 'POST', headers: { ...getAuthHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ oldType: editType, newType: trimmed }) });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error || 'Błąd aktualizacji typu');
@@ -204,7 +204,7 @@ export default function AdminPanel({ currentUser }) {
     if (trimmed === w.name) return cancelEditWarehouse();
     setEditLoading(true);
     try {
-  const res = await fetch(`${BASE}/api/admin/update-warehouse`, { method: 'POST', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editWarehouseId, newName: trimmed }) });
+  const res = await fetch(`${BASE}/api/admin/update-warehouse`, { method: 'POST', headers: { ...getAuthHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editWarehouseId, newName: trimmed }) });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error || 'Błąd aktualizacji magazynu');
@@ -256,7 +256,7 @@ export default function AdminPanel({ currentUser }) {
     if (!name) return setError('Nazwa magazynu nie może być pusta');
     setEditLoading(true);
     try {
-  const res = await fetch(`${BASE}/api/admin/create-warehouse`, { method: 'POST', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+  const res = await fetch(`${BASE}/api/admin/create-warehouse`, { method: 'POST', headers: { ...getAuthHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
       const body = await res.json();
       if (!res.ok) {
         setError(body.error || 'Błąd tworzenia magazynu');

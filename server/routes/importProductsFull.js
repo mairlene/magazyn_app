@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const logger = require('../lib/logger');
 
 // POST /api/products/import-full
 // Accepts JSON: { rows: [ { Nazwa, Rozmiar, Typ, Magazyn, Ilość } ], userId, options }
@@ -63,6 +64,21 @@ router.post("/import-full", async (req, res) => {
           }
         }
 
+        // Ensure Type exists and get typeId
+        let typeId = null;
+        if (type) {
+          let t = await prisma.type.findUnique({ where: { name: type } });
+          if (!t) {
+            try {
+              t = await prisma.type.create({ data: { name: type } });
+              summary.createdTypes = (summary.createdTypes || 0) + 1;
+            } catch (e) {
+              t = await prisma.type.findUnique({ where: { name: type } });
+            }
+          }
+          if (t) typeId = t.id;
+        }
+
         // Find or create product by unique constraint name_size
         let product = null;
         try {
@@ -73,12 +89,15 @@ router.post("/import-full", async (req, res) => {
         }
 
         if (!product) {
-          product = await prisma.product.create({ data: { name, size, type, imageUrl } });
+          const pdata = { name, size, imageUrl };
+          if (type) pdata.type = type;
+          if (typeId) pdata.typeId = typeId;
+          product = await prisma.product.create({ data: pdata });
           summary.createdProducts += 1;
         } else {
           // ensure we do not overwrite existing imageUrl with Excel data (imageUrl remains as is)
-          if (product && product.imageUrl === null && imageUrl) {
-            // won't happen because imageUrl is null here
+          if (typeId && !product.typeId) {
+            try { await prisma.product.update({ where: { id: product.id }, data: { typeId, type: product.type || type } }); } catch (e) {}
           }
         }
 
@@ -111,7 +130,7 @@ router.post("/import-full", async (req, res) => {
 
     return res.json({ success: true, summary, rows: resultRows });
   } catch (e) {
-    console.error('[API /api/products/import-full] Server error:', e);
+    logger.error('[API /api/products/import-full] Server error:', e);
     return res.status(500).json({ error: 'Import error' });
   }
 });

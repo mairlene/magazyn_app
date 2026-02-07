@@ -1,10 +1,9 @@
-// DEPRECATED: legacy pre-scan import endpoint. The frontend currently uses
-// `/api/products/import-row` and `/api/products/import-full` for import flows.
-// Keep this file for now; consider removing after verification.
+// Legacy import endpoint (pre-scan import)
 const express = require("express");
 const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const logger = require('../lib/logger');
 
 // POST /api/products/import
 router.post("/import", async (req, res) => {
@@ -47,7 +46,7 @@ router.post("/import", async (req, res) => {
     }
     res.json({ duplicates });
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: "Błąd importu" });
   }
 });

@@ -47,9 +47,8 @@ function RegisterForm({ onRegister, onSwitchToLogin }) {
     const data = await res.json();
 
     if (data.success && data.user && data.user.id) {
-      // Zapisz userId do localStorage
-      localStorage.setItem("userId", data.user.id);
-      onRegister(data.user.id);
+      // delegate session persistence to App via onRegister
+      onRegister({ id: data.user.id, token: data.token });
     } else {
       setErrors({ form: data.error || data.message || "Błąd rejestracji." });
     }

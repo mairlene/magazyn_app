@@ -1,9 +1,9 @@
-// DEPRECATED: helper for incremental import additions. Check client usage
-// before removing. Consider consolidating with imports/index.js.
+// Helper for incremental import additions
 const express = require("express");
 const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const logger = require('../lib/logger');
 
 // POST /api/products/import-add
 // Accepts rows array and userId. Each row may use Polish or English field names.
@@ -32,16 +32,25 @@ router.post("/import-add", async (req, res) => {
       }
 
       // Find or create product by [name, size]
+      // Ensure type exists and get typeId
+      let typeId = null;
+      if (type) {
+        let t = await prisma.type.findUnique({ where: { name: type } });
+        if (!t) {
+          try { t = await prisma.type.create({ data: { name: type } }); } catch (e) { t = await prisma.type.findUnique({ where: { name: type } }); }
+        }
+        if (t) typeId = t.id;
+      }
+
       let product = await prisma.product.findFirst({ where: { name, size } });
       if (!product) {
-        product = await prisma.product.create({
-          data: {
-            name,
-            size,
-            type,
-            unit
-          }
-        });
+        const pdata = { name, size, type, unit };
+        if (typeId) pdata.typeId = typeId;
+        product = await prisma.product.create({ data: pdata });
+      } else {
+        if (typeId && !product.typeId) {
+          try { await prisma.product.update({ where: { id: product.id }, data: { typeId, type: product.type || type } }); } catch (e) {}
+        }
       }
 
       // Find stock for product in warehouse and update or create
@@ -68,7 +77,7 @@ router.post("/import-add", async (req, res) => {
     }
     res.json({ success: true });
   } catch (e) {
-    console.error('[API /api/products/import-add] Server error:', e);
+    logger.error('[API /api/products/import-add] Server error:', e);
     res.status(500).json({ error: "Product import error" });
   }
 });

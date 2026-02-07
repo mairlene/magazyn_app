@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { getProductsDb, getTypes, BASE, getAuthHeaders } from '../../services/api';
 import aggregateProducts from '../common/aggregateProducts';
 import { useToast } from '../common/ToastContext';
@@ -11,7 +12,7 @@ import AppButton from '../buttons/button';
 import AddIcon from '@mui/icons-material/Add';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 
-export default function ProductView({ user, onBack, setView }) {
+export default function ProductView({ user, onBack, setView, token = null, onRefresh = null }) {
   const [rawProducts, setRawProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [typesList, setTypesList] = useState([]);
@@ -22,6 +23,9 @@ export default function ProductView({ user, onBack, setView }) {
   const [sortBy, setSortBy] = useState('type');
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('viewMode') || 'list');
   const [currentPage, setCurrentPage] = useState(1);
+  const params = useParams();
+  const navigate = useNavigate();
+  const [serverTotal, setServerTotal] = useState(null);
 
   // Delete modal state (hooks must be declared unconditionally)
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -35,20 +39,42 @@ export default function ProductView({ user, onBack, setView }) {
     let mounted = true;
     (async () => {
       try {
-        const [resp, t] = await Promise.all([getProductsDb(), getTypes()]);
+        const pageParam = params.page ? Number(params.page) : 1;
+        const itemsPer = itemsPerPage;
+        const options = {
+          q: (search || '').trim() || null,
+          sort: sortBy || null,
+          type: filterType || null,
+          availability: availability || null,
+        };
+        const prodPromise = pageParam ? getProductsDb(null, pageParam, itemsPer, options) : getProductsDb(null, null, null, options);
+        const [resp, t] = await Promise.all([prodPromise, getTypes()]);
         if (!mounted) return;
         setRawProducts((resp && resp.products) || []);
         setTypesList(t || []);
+        setServerTotal(resp && resp.totalProducts ? Number(resp.totalProducts) : null);
+        if (pageParam && !Number.isNaN(pageParam)) setCurrentPage(pageParam);
       } catch (err) {
         console.error('[ProductView] getProductsDb error', err);
         setRawProducts([]);
         setTypesList([]);
+        setServerTotal(null);
       } finally {
         if (mounted) setLoading(false);
       }
     })();
-    return () => { mounted = false; };
-  }, []);
+    const updatedHandler = (e) => {
+      try {
+        const d = e && e.detail ? e.detail : null;
+        if (d && Array.isArray(d.products)) {
+          setRawProducts(d.products || []);
+          setLoading(false);
+        }
+      } catch (err) { }
+    };
+    window.addEventListener('products-updated', updatedHandler);
+    return () => { window.removeEventListener('products-updated', updatedHandler); mounted = false; };
+  }, [params.page, search, filterType, availability, sortBy]);
 
   // Apply pending filter type when navigated from TypesView
   useEffect(() => {
@@ -67,6 +93,10 @@ export default function ProductView({ user, onBack, setView }) {
   const types = useMemo(() => (typesList || []).map(t => t.name), [typesList]);
 
   const filtered = useMemo(() => {
+    // If server provided a totalProducts, it means server-side filtering/pagination
+    // was applied — avoid applying client-side filters again.
+    if (serverTotal != null) return products || [];
+
     let list = products || [];
     if ((search || '').trim()) {
       const predicate = buildSearchFilter(search);
@@ -102,14 +132,16 @@ export default function ProductView({ user, onBack, setView }) {
     });
 
     return list;
-  }, [products, search, filterType, availability, sortBy]);
+  }, [products, search, filterType, availability, sortBy, serverTotal]);
 
   const paginated = useMemo(() => {
+    // If server-side paging is used, `products` already represent the current page.
+    if (serverTotal != null) return products || [];
     const start = (currentPage - 1) * itemsPerPage;
     return filtered.slice(start, start + itemsPerPage);
-  }, [filtered, currentPage]);
+  }, [filtered, currentPage, serverTotal, products]);
 
-  const totalPages = Math.max(1, Math.ceil((filtered.length || 0) / itemsPerPage));
+  const totalPages = serverTotal ? Math.max(1, Math.ceil(serverTotal / itemsPerPage)) : Math.max(1, Math.ceil((filtered.length || 0) / itemsPerPage));
 
   // Ensure currentPage is valid when filters change
   useEffect(() => {
@@ -127,7 +159,7 @@ export default function ProductView({ user, onBack, setView }) {
       const url = `${BASE || ''}/api/products/${deleteTarget.id}`;
       const res = await fetch(url, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders(token) }
       });
       const text = await res.text().catch(() => '');
       let json = null;
@@ -142,12 +174,27 @@ export default function ProductView({ user, onBack, setView }) {
         return;
       }
       showToast && showToast('Produkt usunięto pomyślnie', { type: 'success' });
-      // Refresh products list after deletion
-      try {
-        const resp = await getProductsDb();
-        setRawProducts((resp && resp.products) || []);
-      } catch (err) {
-        console.warn('[ProductView] refresh after delete failed', err);
+      // Refresh products list after deletion. Prefer parent-provided onRefresh
+      if (typeof onRefresh === 'function') {
+            try {
+              const resp = await onRefresh();
+              setRawProducts((resp && resp.products) || []);
+            } catch (err) {
+              console.warn('[ProductView] onRefresh failed, falling back to local fetch', err);
+              try {
+                const resp = await getProductsDb(null, currentPage, itemsPerPage);
+                setRawProducts((resp && resp.products) || []);
+              } catch (err2) {
+                console.warn('[ProductView] refresh after delete fallback failed', err2);
+              }
+            }
+      } else {
+        try {
+          const resp = await getProductsDb(null, currentPage, itemsPerPage);
+          setRawProducts((resp && resp.products) || []);
+        } catch (err) {
+          console.warn('[ProductView] refresh after delete failed', err);
+        }
       }
     } catch (err) {
       console.error('[ProductView] confirmDelete error', err);
@@ -172,7 +219,7 @@ export default function ProductView({ user, onBack, setView }) {
       <div className="mb-4 w-full">
         <div className="flex flex-col md:flex-row md:items-start md:gap-4">
           <div className="mb-3 md:mb-0 md:flex-shrink-0 md:mr-2 md:w-auto">
-            <select value={availability} onChange={(e) => { setAvailability(e.target.value); setCurrentPage(1); }} className="w-full md:w-48 px-2 py-1.5 rounded-lg border shadow text-[#2a3b6e] text-sm">
+            <select value={availability} onChange={(e) => { setAvailability(e.target.value); try { navigate('/app/products/1'); } catch (e) {} }} className="w-full md:w-48 px-2 py-1.5 rounded-lg border shadow text-[#2a3b6e] text-sm">
               <option value="all">Dostępność (wszystkie)</option>
               <option value="available">Dostępne</option>
               <option value="unavailable">Niedostępne</option>
@@ -182,9 +229,9 @@ export default function ProductView({ user, onBack, setView }) {
           <div className="flex-1">
             <ProductFilterBar
               search={search}
-              setSearch={(v) => { setSearch(v); setCurrentPage(1); }}
+              setSearch={(v) => { setSearch(v); try { navigate('/app/products/1'); } catch (e) {} }}
               filterType={filterType}
-              setFilterType={(v) => { setFilterType(v); setCurrentPage(1); }}
+              setFilterType={(v) => { setFilterType(v); try { navigate('/app/products/1'); } catch (e) {} }}
               filterWarehouse={null}
               setFilterWarehouse={() => {}}
               types={types}
@@ -197,7 +244,7 @@ export default function ProductView({ user, onBack, setView }) {
 
       <ProductOptionsBar
         sortBy={sortBy}
-        setSortBy={setSortBy}
+        setSortBy={(v) => { setSortBy(v); try { navigate('/app/products/1'); } catch (e) {} }}
         sortOptions={[{ value: 'type', label: 'Typ' }, { value: 'name', label: 'Nazwa' }, { value: 'size', label: 'Rozmiar' }]}
         viewMode={viewMode}
         setViewMode={setViewMode}
@@ -223,7 +270,7 @@ export default function ProductView({ user, onBack, setView }) {
       <div className="mt-2 mb-3 flex items-center justify-between">
         <div className="text-xs text-gray-500">Znaleziono {filtered.length} produktów.</div>
         <div className="flex-shrink-0">
-          <Pagination totalPages={totalPages} currentPage={currentPage} onChangePage={(n) => { setCurrentPage(n); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+          <Pagination totalPages={totalPages} currentPage={currentPage} onChangePage={(n) => { navigate(`/app/products/${n}`); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
         </div>
       </div>
 
@@ -239,7 +286,7 @@ export default function ProductView({ user, onBack, setView }) {
 
       {/* Bottom pagination */}
       <div className="mt-4 mb-6 flex items-center justify-center">
-        <Pagination totalPages={totalPages} currentPage={currentPage} onChangePage={(n) => { setCurrentPage(n); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+        <Pagination totalPages={totalPages} currentPage={currentPage} onChangePage={(n) => { navigate(`/app/products/${n}`); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
       </div>
 
       {showDeleteModal && (

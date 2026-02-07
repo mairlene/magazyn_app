@@ -3,6 +3,7 @@ const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const prisma = new PrismaClient();
+const logger = require('../lib/logger');
 
 // Public: list types
 router.get('/', async (req, res) => {
@@ -10,7 +11,7 @@ router.get('/', async (req, res) => {
     const types = await prisma.type.findMany({ orderBy: { name: 'asc' } });
     res.json({ success: true, types });
   } catch (err) {
-    console.error('[TYPES] list error', err);
+    logger.error('[TYPES] list error', err);
     res.status(500).json({ error: 'Błąd pobierania typów' });
   }
 });
@@ -26,7 +27,7 @@ router.post('/', authMiddleware, requireRole('admin'), async (req, res) => {
     const created = await prisma.type.create({ data: { name: trimmed } });
     res.json({ success: true, type: created });
   } catch (err) {
-    console.error('[TYPES] create error', err);
+    logger.error('[TYPES] create error', err);
     res.status(500).json({ error: 'Błąd tworzenia typu' });
   }
 });
@@ -39,7 +40,7 @@ router.put('/:id', authMiddleware, requireRole('admin'), async (req, res) => {
     const updated = await prisma.type.update({ where: { id }, data: { name } });
     res.json({ success: true, type: updated });
   } catch (err) {
-    console.error('[TYPES] update error', err);
+    logger.error('[TYPES] update error', err);
     res.status(500).json({ error: 'Błąd aktualizacji typu' });
   }
 });
@@ -53,7 +54,7 @@ router.delete('/:id', authMiddleware, requireRole('admin'), async (req, res) => 
     await prisma.type.delete({ where: { id } });
     res.json({ success: true });
   } catch (err) {
-    console.error('[TYPES] delete error', err);
+    logger.error('[TYPES] delete error', err);
     res.status(500).json({ error: 'Błąd usuwania typu' });
   }
 });

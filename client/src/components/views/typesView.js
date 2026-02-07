@@ -5,7 +5,7 @@ import AddIcon from '@mui/icons-material/Add';
 import CategoryIcon from '@mui/icons-material/Category';
 import formatError from '../../utils/formatError';
 
-export default function TypesView({ setView }) {
+export default function TypesView({ setView, token = null }) {
   const [products, setProducts] = useState([]);
   const [typesList, setTypesList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,7 +14,9 @@ export default function TypesView({ setView }) {
     let mounted = true;
     (async () => {
       try {
-        const [resp, t] = await Promise.all([getProductsDb(), getTypes()]);
+        const DEFAULT_PAGE = 1;
+        const DEFAULT_LIMIT = 100;
+        const [resp, t] = await Promise.all([getProductsDb(null, DEFAULT_PAGE, DEFAULT_LIMIT), getTypes()]);
         if (!mounted) return;
         setProducts((resp && resp.products) || []);
         setTypesList(t || []);
@@ -72,7 +74,7 @@ export default function TypesView({ setView }) {
     if (!t) return setError('Nazwa typu nie może być pusta');
     setCreating(true); setError(null);
     try {
-      const res = await fetch(`${BASE}/api/types`, { method: 'POST', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ name: t }) });
+      const res = await fetch(`${BASE}/api/types`, { method: 'POST', headers: { ...getAuthHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ name: t }) });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(body.error || 'Błąd tworzenia typu');
@@ -93,7 +95,7 @@ export default function TypesView({ setView }) {
       // editTypeId holds the type id
       const found = typesList.find(tt => tt.id === editTypeId);
       if (!found) { setError('Nie znaleziono typu do edycji'); setCreating(false); return; }
-      const res = await fetch(`${BASE}/api/types/${found.id}`, { method: 'PUT', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName }) });
+      const res = await fetch(`${BASE}/api/types/${found.id}`, { method: 'PUT', headers: { ...getAuthHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
           setError(body.error || 'Błąd aktualizacji typu');
@@ -125,7 +127,7 @@ export default function TypesView({ setView }) {
     const id = deleteTarget.id;
     setCreating(true); setError(null);
     try {
-      const res = await fetch(`${BASE}/api/types/${id}`, { method: 'DELETE', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' } });
+      const res = await fetch(`${BASE}/api/types/${id}`, { method: 'DELETE', headers: { ...getAuthHeaders(token), 'Content-Type': 'application/json' } });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(body.error || 'Błąd usuwania typu');

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const logger = require('../lib/logger');
 // const { authMiddleware } = require('../middleware/auth');
 
 // POST /api/archive/by-user
@@ -36,7 +37,7 @@ router.post('/by-user', async (req, res) => {
 
     res.json({ products, total, page, limit });
   } catch (err) {
-    console.error('[ARCHIVE] Error:', err);
+    logger.error('[ARCHIVE] Error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -90,7 +91,7 @@ router.post('/restore', async (req, res) => {
     await prisma.archive.delete({ where: { id: archiveId } });
     res.json({ success: true });
   } catch (err) {
-    console.error('[ARCHIVE] Restore error:', err);
+    logger.error('[ARCHIVE] Restore error:', err);
     res.status(500).json({ error: 'Błąd przywracania produktu' });
   }
 });

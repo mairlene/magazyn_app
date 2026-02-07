@@ -1,97 +1,37 @@
 import React, { useState, useEffect } from "react";
-import { BASE, getAuthHeaders } from './services/api';
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import useSession from './hooks/useSession';
 import LoginForm from "./components/forms/loginForm";
 import RegisterForm from "./components/forms/registerForm";
 import MainApp from "./components/mainApp";
 import ErrorBoundary from './components/common/ErrorBoundary';
 
 function App() {
-  // On startup we DO NOT trust localStorage blindly
-  const [userId, setUserId] = useState(null);
-  const [view, setView] = useState("login");
-  const [restoring, setRestoring] = useState(true);
-  const [sessionError, setSessionError] = useState(null);
-
-  // ---- Restore session from storage safely ----
+  // Session state managed by hook
+  const { userId, token, user, restoring, login, logout } = useSession();
+  const navigate = useNavigate();
+  // Update-available banner state: shown when index.js detects a new build fingerprint.
+  const [updateAvailable, setUpdateAvailable] = useState(false);
   useEffect(() => {
-    const storedId = localStorage.getItem("userId");
-    if (!storedId) {
-      setRestoring(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    async function restoreSession() {
-      try {
-        const headers = {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),   // may be invalid if cache is old → safe try/catch below
-        };
-
-        const res = await fetch(`${BASE}/api/auth/get-user`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ id: storedId })
-        });
-
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-        const data = await res.json();
-        if (cancelled) return;
-
-        if (data?.success) {
-          setUserId(storedId);
-          setView("main");
-        } else {
-          clearSession();
-        }
-      } catch (err) {
-        if (cancelled) return;
-
-        console.warn("[restoreSession] error:", err);
-        setSessionError(err.message || "Nieznany błąd sesji");
-        clearSession(false); // clear storage but keep showing login later
-      } finally {
-        if (!cancelled) setRestoring(false);
-      }
-    }
-
-    restoreSession();
-
-    return () => { cancelled = true; };
+    const onUpdate = (e) => { setUpdateAvailable(true); };
+    window.addEventListener('app:update-available', onUpdate);
+    // fallback: localStorage flag
+    if (typeof window !== 'undefined' && localStorage.getItem('app:updateAvailable')) setUpdateAvailable(true);
+    return () => window.removeEventListener('app:update-available', onUpdate);
   }, []);
-
-  // ---- Fallback 2: safety timeout (in case fetch never resolves) ----
-  useEffect(() => {
-    const t = setTimeout(() => setRestoring(false), 2500);
-    return () => clearTimeout(t);
-  }, []);
-
-  function clearSession(switchToLogin = true) {
-    try {
-      localStorage.removeItem("userId");
-      localStorage.removeItem("token");
-    } catch (e) {}
-
-    setUserId(null);
-    if (switchToLogin) setView("login");
-  }
 
   // ---- Login / Logout handlers ----
-  const handleLogin = (id) => {
-    try {
-      localStorage.setItem("userId", id);
-    } catch (e) {}
-    setUserId(id);
-    setView("main");
+  const handleLogin = async ({ id, token } = {}) => {
+    await login({ id, token });
+    navigate('/app/products', { replace: true });
   };
 
   const handleLogout = () => {
-    clearSession(true);
+    logout();
+    navigate('/login', { replace: true });
   };
 
-  // ---- Render ----
+  // ---- Render (route-based) ----
   if (restoring) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
@@ -100,58 +40,36 @@ function App() {
           <div className="text-lg font-semibold text-[#2a3b6e] mb-2">Przywracanie sesji...</div>
           <div className="text-sm text-gray-600 mb-4">Sprawdzam zapisane logowanie…</div>
 
-          {sessionError && (
-            <div className="text-red-600 text-sm mt-2">
-              Błąd sesji: {sessionError}
-              <div className="flex gap-3 justify-center mt-3">
-                <button
-                  onClick={() => window.location.reload()}
-                  className="px-3 py-1 bg-[#2a3b6e] text-white rounded"
-                >
-                  Spróbuj ponownie
-                </button>
-                <button
-                  onClick={() => clearSession(true)}
-                  className="px-3 py-1 border rounded"
-                >
-                  Wyczyść dane
-                </button>
-              </div>
-            </div>
-          )}
+          {/* simplified: session errors handled in hook; show only spinner while restoring */}
         </div>
       </div>
     );
   }
+  
 
-  // ---- Guaranteed fallbacks (prevent white screen forever) ----
-  if (view === "main" && !userId) {
-    clearSession(true);
-    return null;
-  }
-
-  // ---- Normal flow ----
   return (
     <>
-      {view === "login" && (
-        <LoginForm
-          onLogin={handleLogin}
-          onSwitchToRegister={() => setView("register")}
-        />
+      {updateAvailable && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-yellow-50 border border-yellow-300 text-yellow-900 px-4 py-2 rounded shadow">
+          <div className="flex items-center gap-3">
+            <div>Nowa wersja aplikacji dostępna.</div>
+            <div className="ml-2">
+              <button className="mr-2 underline" onClick={() => { try { window.appDoCleanup(); } catch (e) { window.location.reload(); } }}>Odśwież</button>
+              <button onClick={() => { setUpdateAvailable(false); localStorage.removeItem('app:updateAvailable'); }}>Pomiń</button>
+            </div>
+          </div>
+        </div>
       )}
 
-      {view === "register" && (
-        <RegisterForm
-          onRegister={handleLogin}
-          onSwitchToLogin={() => setView("login")}
-        />
-      )}
+    <Routes>
+      <Route path="/login" element={<LoginForm onLogin={handleLogin} onSwitchToRegister={() => { navigate('/register'); }} />} />
+      <Route path="/register" element={<RegisterForm onRegister={handleLogin} onSwitchToLogin={() => { navigate('/login'); }} />} />
 
-      {view === "main" && (
-        <ErrorBoundary>
-          <MainApp userId={userId} onLogout={handleLogout} />
-        </ErrorBoundary>
-      )}
+      <Route path="/app/*" element={userId ? <ErrorBoundary><MainApp userId={userId} token={token} user={user} onLogout={handleLogout} /></ErrorBoundary> : <Navigate to="/login" replace />} />
+
+      <Route path="/" element={userId ? <Navigate to="/app" replace /> : <Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
     </>
   );
 }

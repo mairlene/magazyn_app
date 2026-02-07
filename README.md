@@ -1,70 +1,158 @@
-# Getting Started with Create React App
+# Magazyn App
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Lekka aplikacja magazynowa (frontend React + backend Express + Prisma). README zawiera instrukcje uruchomienia, budowania i publikacji projektu.
 
-## Available Scripts
+## Zawartość repozytorium
+- `client/` — aplikacja React (frontend)
+- `server/` — serwer Express, Prisma i skrypty serwera
+- `server/prisma/` — schemat i migracje bazy danych
 
-In the project directory, you can run:
+## Wymagania
+- Node.js 18+ (zalecane LTS)
+- npm 8+ lub yarn
+- PostgreSQL (jeśli chcesz uruchomić serwer lokalnie z bazą)
 
-### `npm start`
+## Zmienne środowiskowe
+Utwórz plik `.env` w katalogu `server/` na bazie `server/.env.example` i — opcjonalnie — `.env` w katalogu głównym. Przykładowe klucze:
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- `DATABASE_URL` — URL do Postgres (np. `postgresql://user:pass@localhost:5432/magazyn`)
+# Magazyn App
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+Aplikacja do zarządzania magazynami: produkty, stany, transfery i importy. Projekt w wersji developerskiej.
 
-### `npm test`
+⚠️ Projekt w wersji developerskiej
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Demo
 
-### `npm run build`
+- Brak publicznego demo — uruchom lokalnie (instrukcja w sekcji „Uruchomienie lokalne”).
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Screenshots
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+![Logowanie i rejestracja](client/public/screenshots/logowanie.png)
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+![Akcja pobierz](client/public/screenshots/pobieranie.png)
 
-### `npm run eject`
+![Akcja przenieś](client/public/screenshots/przenoszenie.png)
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+![Widok magazynów](client/public/screenshots/widok_magazynów.png)
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+![Widok typów produktów](client/public/screenshots/widok_typów.png)
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+![Szczegóły produktu](client/public/screenshots/szczegóły_produktu.png)
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+![Edycja lub dodawanie produktu](client/public/screenshots/edycja.png)
 
-## Learn More
+![Import z pliku](client/public/screenshots/import_z_pliku.png)
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+![Tryb responsywny - widok](client/public/screenshots/ekrany_mobilne.png)
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+![Tryb responsywny - menu](client/public/screenshots/ekrany_mobilne_menu.png)
 
-### Code Splitting
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## Tech Stack
 
-### Analyzing the Bundle Size
+- Frontend: React (Create React App), MUI, Tailwind CSS
+- Backend: Node.js, Express
+- ORM: Prisma
+- Database: PostgreSQL
+- Auth: JWT
+- File uploads: Multer (z obsługą miniatur przez sharp)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+Oddzielony frontend (w `client/`) i backend (w `server/`), API REST, baza zarządzana przez Prisma.
 
-### Making a Progressive Web App
+## Funkcjonalności
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+- Rejestracja i logowanie użytkowników
+- CRUD produktów (z obsługą obrazów)
+- Zarządzanie magazynami i przesunięciami stanów (transfery)
+- Import arkuszy Excel / CSV z tworzeniem magazynów i produktów
+- Historia zmian stanu produktów
+- Uprawnienia podstawowe (rola użytkownika)
 
-### Advanced Configuration
+## Architektura
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+- Oddzielny frontend i backend: `client/` (UI) i `server/` (API + logika) są oddzielone.
+- Baza: Prisma + PostgreSQL — migracje i modele w `server/prisma`.
+- Centralny klient API w `client/src/services/api.js` — ułatwia testy i zmianę endpointów.
+- UI: komponenty z prostym eventowaniem (np. `products-updated`) by unikać przestarzałych widoków.
 
-### Deployment
+## Uruchomienie lokalne (developerskie)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+Wymagania:
+- Node.js (polecane LTS)
+- PostgreSQL dostępny i skonfigurowany
 
-### `npm run build` fails to minify
+1. Sklonuj repozytorium
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+```bash
+git clone https://github.com/OWNER/REPO.git
+cd REPO
+```
+
+2. Skonfiguruj plik `.env` (możesz skopiować `.env.example`)
+
+Przykładowe zmienne (zawarte też w `.env.example`):
+
+```
+DATABASE_URL=postgresql://user:password@localhost:5432/magazyn_dev
+JWT_SECRET=changeme
+PORT=5000
+REACT_APP_API_URL=http://localhost:5000/api
+```
+
+3. Instalacja zależności
+
+```bash
+# Serwer
+cd server
+npm install
+
+# Klient
+cd ../client
+npm install
+```
+
+4. Migracje bazy (lokalnie)
+
+W katalogu `server` uruchom (jeśli to pierwsze uruchomienie):
+
+```bash
+cd server
+npx prisma migrate dev --name init
+```
+
+5. Uruchomienie w trybie developerskim
+
+W dwóch terminalach uruchom serwer i klienta:
+
+```bash
+# terminal 1 (serwer)
+cd server
+npm run dev
+
+# terminal 2 (klient)
+cd client
+npm start
+```
+
+6. Build produkcyjny frontendu
+
+```bash
+cd client
+npm run build
+```
+
+Serwer statycznie serwuje `client/build` jeśli istnieje.
+
+Jeśli coś nie działa:
+- Sprawdź `DATABASE_URL` i czy baza jest dostępna.
+- Zajrzyj do `server/logs` (jeśli istnieje) lub konsoli serwera.
+
+## Status projektu
+
+🚧 Projekt w wersji developerskiej — planowane:
+- Testy jednostkowe i integracyjne (Jest + Supertest)
+-- Docker + docker-compose dla prostego lokalnego środowiska
+-- Audyt zależności i aktualizacje security
+
+

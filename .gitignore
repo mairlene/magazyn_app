@@ -16,6 +16,9 @@ server/coverage/
 /build
 client/build/
 client/dist/
+client/build/
+client/build/**/*
+public/build/
 
 # Client caches and tool artifacts
 client/.cache/
@@ -30,6 +33,7 @@ Thumbs.db
 # Environment and secrets
 .env
 .env.*
+!/.env.example
 
 # Logs
 logs/
@@ -42,6 +46,15 @@ yarn-error.log*
 # Deprecated / backups
 _deprecated/
 **/_deprecated/
+archive/
+**/_deprecated/
+**/_deprecated_backups/
+**/*_backups/
+**/*_backup*/
+client/src/components/_deprecated/
+client/_deprecated_backups/
+server/_deprecated/
+server/_deprecated_backups/
 
 # Local .git backup dirs and ad-hoc backups
 .git-backup*/
@@ -51,6 +64,7 @@ _deprecated/
 server/generated/
 generated/
 generated/prisma/
+server/generated/
 
 # Public and uploads
 public/
@@ -70,3 +84,15 @@ server.pid
 server/server.pid
 
 
+prisma/*.backup
+*.backup
+*.bak
+
+# Build / generated
+client/build/
+server/generated/
+prisma/*.backup
+
+# Ignore local env files for client and server
+client/.env
+server/.env

@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const logger = require('../lib/logger');
 const { authMiddleware } = require('../middleware/auth');
 
 // Stable: Return product and stocks for a given product id
@@ -33,7 +34,7 @@ router.get("/:id/details", authMiddleware, async (req, res) => {
     // response payload prepared
     return res.json(payload);
   } catch (e) {
-    console.error('[PRODUCTS DETAILS] Error:', e);
+    logger.error('[PRODUCTS DETAILS] Error:', e);
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -66,7 +67,7 @@ router.get("/:id/stocks", authMiddleware, async (req, res) => {
     // response payload prepared
     return res.json(payload);
   } catch (e) {
-    console.error('[PRODUCTS STOCKS] Error:', e);
+    logger.error('[PRODUCTS STOCKS] Error:', e);
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -132,7 +133,7 @@ router.get("/:id/history", authMiddleware, async (req, res) => {
     // response payload prepared
     return res.json(payload);
   } catch (e) {
-    console.error('[PRODUCTS HISTORY] Error:', e);
+    logger.error('[PRODUCTS HISTORY] Error:', e);
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -181,7 +182,7 @@ router.get("/:id/history/latest", authMiddleware, async (req, res) => {
     // response payload prepared
     return res.json(payload);
   } catch (e) {
-    console.error('[PRODUCTS HISTORY LATEST] Error:', e);
+    logger.error('[PRODUCTS HISTORY LATEST] Error:', e);
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -190,10 +191,38 @@ router.get("/:id/history/latest", authMiddleware, async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const warehouseId = req.query.warehouseId ? Number(req.query.warehouseId) : null;
-    const stocks = await prisma.stock.findMany({
-      where: warehouseId ? { warehouseId } : {},
-      include: { product: true, warehouse: true },
-    });
+    // Pagination: support ?page=<n>&limit=<m>
+    const pageRaw = req.query.page ?? null;
+    const limitRaw = req.query.limit ?? null;
+    const page = pageRaw ? Math.max(1, Number(pageRaw)) : null;
+    const requestedLimit = limitRaw ? Math.max(1, Number(limitRaw)) : null;
+
+    const DEFAULT_LIMIT = 200; // default number of rows when client does not supply limit
+    const MAX_LIMIT = 1000; // absolute cap to avoid huge responses
+    const limit = requestedLimit ? Math.min(requestedLimit, MAX_LIMIT) : DEFAULT_LIMIT;
+
+    const whereClause = warehouseId ? { warehouseId } : {};
+
+    // If pagination requested, return paginated stocks + total count; otherwise limit to DEFAULT_LIMIT
+    let stocks;
+    let total = null;
+    if (page) {
+      total = await prisma.stock.count({ where: whereClause });
+      stocks = await prisma.stock.findMany({
+        where: whereClause,
+        include: { product: true, warehouse: true },
+        skip: (page - 1) * limit,
+        take: limit,
+      });
+    } else {
+      // No explicit page -> fall back to safe default limit to avoid returning huge payloads
+      stocks = await prisma.stock.findMany({
+        where: whereClause,
+        include: { product: true, warehouse: true },
+        take: limit,
+      });
+    }
+
     const result = stocks.map((s) => ({
       id: s.product.id,
       name: s.product.name,
@@ -204,9 +233,20 @@ router.get("/", async (req, res) => {
       warehouse: s.warehouse?.name,
       imageUrl: s.product.imageUrl || null,
     }));
-    res.json(result);
+
+    const payload = { products: result };
+    if (page) {
+      payload.page = page;
+      payload.limit = limit;
+      payload.total = total;
+    } else {
+      payload.limit = limit;
+      // If we didn't compute total, include a flag indicating the response was limited
+      payload.truncated = stocks.length === limit;
+    }
+    res.json(payload);
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: "Błąd pobierania produktów z bazy" });
   }
 });
@@ -252,7 +292,7 @@ router.post("/", authMiddleware, async (req, res) => {
     await prisma.stockChange.create({ data: { type: "add", quantity: Number(quantity), productId: product.id, warehouseId: warehouseRecord.id, userId: uid } });
     res.json({ success: true, product });
   } catch (e) {
-    console.error("[PRODUCTS] Error:", e);
+    logger.error("[PRODUCTS] Error:", e);
     res.status(500).json({ error: "Błąd dodawania produktu" });
   }
 });

@@ -10,6 +10,17 @@ const logger = require('./lib/logger');
 
 dotenv.config();
 
+// Fail fast: require JWT_SECRET in production to avoid insecure fallback
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  try {
+    logger.error('Missing required environment variable: JWT_SECRET. Aborting startup.');
+  } catch (e) {
+    // logger may not be available; fallback to stderr
+    try { process.stderr.write('Missing required environment variable: JWT_SECRET. Aborting startup.\n'); } catch (e2) {}
+  }
+  process.exit(1);
+}
+
 const app = express();
 
 // If the server is running behind a proxy (Cloudflare, nginx, etc.) and the
@@ -70,7 +81,7 @@ app.use(cookieParser());
 // Log incoming API requests to help diagnose routing/forwarding issues
 app.use('/api', (req, _res, next) => {
   try {
-    // incoming API logging removed to reduce console noise
+    // request logging placeholder
   } catch (e) {
     // ignore logging errors
   }
@@ -87,11 +98,7 @@ const authLimiter = rateLimit({
 
 app.use("/api/auth", authLimiter, require("./routes/authUser"));
 app.use("/api/products-db", require("./routes/productsDb"));
-// Mount a single grouped router for product-related endpoints. The
-// new router re-exports the legacy route modules to preserve existing
-// endpoint paths (eg. /api/products/add, /api/products/import, etc.).
-// Prefer the grouped products router (folder index) so import-related
-// sub-routers (importRow, importProducts, etc.) are mounted too.
+// Product-related endpoints (grouped router)
 app.use("/api/products", require("./routes/products/index.js"));
 app.use("/api/warehouses", require("./routes/warehouses"));
 app.use("/api/products/delete-from-warehouse", require("./routes/deleteFromWarehouse"));
@@ -103,10 +110,10 @@ app.use("/api/use", require("./routes/use"));
 app.use("/api/archive", require("./routes/archive"));
 app.use("/api/admin", require("./routes/admin"));
 app.use("/api/types", require("./routes/types"));
-// Consolidated uploads router (preserves POST /api/upload behaviour via
-// the legacy handler mounted inside the uploads aggregator).
+// Uploads router
 app.use("/api/upload", require("./routes/uploads"));
 app.use("/api/stock", require("./routes/updateStock"));
+// API docs UI not mounted
 // Serve uploads and set permissive cross-origin headers so images can be
 // embedded/loaded from the public frontend (or proxied host). We set
 // Access-Control-Allow-Origin and Cross-Origin-Resource-Policy here only for
@@ -154,15 +161,15 @@ async function ensureSeedData() {
   try {
     const warehouseCount = await prisma.warehouse.count();
     if (warehouseCount === 0) {
-      console.warn('[SERVER] no warehouses found - creating default warehouses');
-      await prisma.warehouse.createMany({ data: [ { name: 'GŁÓWNY' }, { name: 'OUTLET' } ] });
+      logger.warn('[SERVER] no warehouses found - creating default warehouse Magazyn główny');
+      await prisma.warehouse.createMany({ data: [ { name: 'Magazyn główny' } ] });
     }
 
     const productCount = await prisma.product.count();
     if (productCount === 0) {
-      console.warn('[SERVER] no products found - creating default product types as placeholder products');
+      logger.warn('[SERVER] no products found - creating default product types as placeholder products');
       // Create simple placeholder products that expose the desired types in the UI.
-      const defaultTypes = ['Klimatyzacja', 'Serwis', 'Wentylacja'];
+      const defaultTypes = ['Meble'];
       // Use a small descriptive name so admins can easily find and remove them later.
       const created = [];
       for (const t of defaultTypes) {
@@ -185,8 +192,28 @@ async function ensureSeedData() {
 
 // Start server after ensuring seed data
 (async () => {
-  await ensureSeedData();
-    const server = app.listen(PORT, () => {
+  // In production we avoid automatically creating seed data unless
+  // explicitly enabled via ENABLE_SEED=true. This prevents accidental
+  // writes to a live database during deploys.
+  if (process.env.NODE_ENV === 'production' && process.env.ENABLE_SEED !== 'true') {
+    logger.info('[SERVER] production mode: skipping seed data (set ENABLE_SEED=true to enable)');
+  } else {
+    await ensureSeedData();
+  }
+
+  const server = app.listen(PORT, () => {
     logger.info(`Server listening on port ${PORT}`);
   });
 })();
+
+// Health endpoint for monitoring / readiness checks
+app.get('/health', async (_req, res) => {
+  try {
+    // quick DB check
+    await prisma.$queryRaw`SELECT 1`;
+    return res.json({ ok: true, db: true, time: Date.now() });
+  } catch (err) {
+    logger.error('[HEALTH] DB check failed', err && err.message ? err.message : err);
+    return res.status(503).json({ ok: false, db: false, error: String(err) });
+  }
+});

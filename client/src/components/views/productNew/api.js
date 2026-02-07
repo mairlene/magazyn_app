@@ -6,10 +6,10 @@ async function parseBody(res) {
   return body;
 }
 
-export async function addProduct(payload) {
+export async function addProduct(payload, token = null) {
   const url = `${BASE || ''}/api/products`;
   try {
-    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(payload) });
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders(token) }, body: JSON.stringify(payload) });
     const body = await parseBody(res);
     
     return { ok: res.ok, status: res.status, body };
@@ -20,11 +20,11 @@ export async function addProduct(payload) {
   }
 }
 
-export async function updateProduct(id, payload) {
+export async function updateProduct(id, payload, token = null) {
   if (!id) throw new Error('Missing product id');
   const url = `${BASE || ''}/api/products/${id}`;
   try {
-    const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(payload) });
+    const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAuthHeaders(token) }, body: JSON.stringify(payload) });
     const body = await parseBody(res);
     
     return { ok: res.ok, status: res.status, body };
@@ -35,4 +35,5 @@ export async function updateProduct(id, payload) {
   }
 }
 
-export default { addProduct, updateProduct };
+const productApi = { addProduct, updateProduct };
+export default productApi;

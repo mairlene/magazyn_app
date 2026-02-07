@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const logger = require('../lib/logger');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = '7d';
@@ -9,7 +10,7 @@ if (!JWT_SECRET) {
     throw new Error('JWT_SECRET environment variable is required in production');
   } else {
     // In development warn and fall back to a non-secret for convenience
-    console.warn('Warning: JWT_SECRET is not set. Using insecure fallback secret for development only.');
+    logger.warn('Warning: JWT_SECRET is not set. Using insecure fallback secret for development only.');
   }
 }
 

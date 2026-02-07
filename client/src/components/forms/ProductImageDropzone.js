@@ -6,9 +6,51 @@ import { resolveImageUrl } from '../../services/api';
 export default function ProductImageDropzone({ image, setImage }) {
   const fileInputRef = useRef();
   const [previewError, setPreviewError] = React.useState(false);
+  const [objectUrl, setObjectUrl] = React.useState(null);
+  const objectUrlRef = useRef(null);
 
   React.useEffect(() => {
     setPreviewError(false);
+    try {
+      // log incoming image value and a best-effort preview src
+      let info = { raw: image };
+      try {
+        if (typeof image === 'string') {
+          const trimmed = image.trim();
+          if ((trimmed.startsWith('{') || trimmed.startsWith('['))) {
+            try { info.parsed = JSON.parse(trimmed); } catch (_) { info.parsed = null; }
+          }
+        }
+      } catch (_) {}
+      console.warn('[ProductImageDropzone] image prop changed', info);
+    } catch (_) {}
+    // Manage object URL lifecycle when `image` is a File/Blob
+    // Revoke previously created object URL (tracked in ref) to avoid leaking
+    try {
+      if (objectUrlRef.current) {
+        try { URL.revokeObjectURL(objectUrlRef.current); } catch (_) {}
+        objectUrlRef.current = null;
+        setObjectUrl(null);
+      }
+    } catch (_) {}
+
+    if (image && (image instanceof File || image instanceof Blob || (typeof image === 'object' && image instanceof Object && image.size))) {
+      try {
+        const url = URL.createObjectURL(image);
+        objectUrlRef.current = url;
+        setObjectUrl(url);
+      } catch (e) {
+        objectUrlRef.current = null;
+        setObjectUrl(null);
+      }
+    }
+
+    return () => {
+      if (objectUrlRef.current) {
+        try { URL.revokeObjectURL(objectUrlRef.current); } catch (_) {}
+        objectUrlRef.current = null;
+      }
+    };
   }, [image]);
 
   const handleDrop = async (e) => {
@@ -61,17 +103,70 @@ export default function ProductImageDropzone({ image, setImage }) {
       />
       {image ? (
         <div className="relative w-full h-full flex items-center justify-center p-1">
-          {(!previewError && image) ? (
-            <img
-              src={typeof image === "string" ? resolveImageUrl(image) : URL.createObjectURL(image)}
-              alt="Podgląd zdjęcia"
-              className="object-contain w-full h-full rounded-xl shadow bg-white"
-              onError={(e) => {
-                try { console.error('[ProductImageDropzone] preview image load error', { src: e?.target?.src }); } catch (err) {}
-                setPreviewError(true);
-              }}
-            />
-          ) : (
+          {(!previewError && image) ? (() => {
+            // Determine preview src robustly: image may be a string URL, a stringified JSON
+            // object (common when API sanitized complex fields), or a File/Blob.
+            let src = null;
+            try {
+              if (typeof image === 'string') {
+                const trimmed = image.trim();
+                if ((trimmed.startsWith('{') || trimmed.startsWith('['))) {
+                  try {
+                    const parsed = JSON.parse(trimmed);
+                    // Common shapes: { thumbUrl, url } or { imageUrl, imageThumb } or array of urls
+                    if (parsed) {
+                      if (Array.isArray(parsed) && parsed.length) src = parsed[0];
+                      else if (parsed.thumbUrl) src = parsed.thumbUrl;
+                      else if (parsed.imageThumb) src = parsed.imageThumb;
+                      else if (parsed.url) src = parsed.url;
+                      else if (parsed.imageUrl) src = parsed.imageUrl;
+                      else {
+                        // fallback to first string value in object
+                        const vals = Object.values(parsed).filter(v => typeof v === 'string');
+                        if (vals.length) src = vals[0];
+                        else src = trimmed;
+                      }
+                    }
+                  } catch (e) {
+                    src = trimmed;
+                  }
+                } else {
+                  src = trimmed;
+                }
+                // resolve relative paths
+                src = resolveImageUrl(src);
+              } else if (image instanceof File || image instanceof Blob) {
+                src = URL.createObjectURL(image);
+              } else if (image && typeof image === 'object' && image.url) {
+                src = resolveImageUrl(image.url);
+              } else {
+                // unknown type -> try string coercion
+                src = resolveImageUrl(String(image));
+              }
+            } catch (err) {
+              src = null;
+            }
+
+            if (!src) return (
+              <div className="w-full h-full rounded-xl shadow bg-white border border-dashed border-gray-400 flex items-center justify-center">
+                <span className="text-gray-500">Brak podglądu</span>
+              </div>
+            );
+
+            // If we created an objectUrl for a File/Blob, prefer it (and keep src for logging)
+            const finalSrc = objectUrl || src;
+            return (
+              <img
+                src={finalSrc}
+                alt="Podgląd zdjęcia"
+                className="object-contain w-full h-full rounded-xl shadow bg-white"
+                onError={(e) => {
+                  try { console.error('[ProductImageDropzone] preview image load error', { src: e?.target?.src }); } catch (err) {}
+                  setPreviewError(true);
+                }}
+              />
+            );
+          })() : (
             <div className="w-full h-full rounded-xl shadow bg-white border border-dashed border-gray-400 flex items-center justify-center">
               <span className="text-gray-500">Brak podglądu</span>
             </div>

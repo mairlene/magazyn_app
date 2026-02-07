@@ -1,10 +1,9 @@
-// DEPRECATED: import action resolution logic. Verify client usage before
-// removing. Keep this file until frontend is updated to a single import
-// pipeline.
+// Import action resolution endpoint
 const express = require("express");
 const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const logger = require('../lib/logger');
 
 // POST /api/products/import-action
 // { action: "increase" | "reject", product: { Nazwa, Typ, Magazyn, IlośćImportowana } }
@@ -44,7 +43,7 @@ router.post("/import-action", async (req, res) => {
     // Odrzuć - nic nie robimy
     return res.json({ success: true });
   } catch (e) {
-    console.error(e);
+    logger.error('[API /api/products/import-action] Error:', e);
     res.status(500).json({ error: "Błąd akcji importu" });
   }
 });

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { BASE } from '../../services/api';
+import { BASE, getAuthHeaders } from '../../services/api';
 import { SaveButton, CancelButton } from '../buttons/button';
 
-export default function ProfileView({ user, onUpdate, onChangePassword }) {
+export default function ProfileView({ user, onUpdate, onChangePassword, token = null }) {
   const [editName, setEditName] = useState(false);
   const [name, setName] = useState(user.name);
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl);
@@ -18,11 +18,11 @@ export default function ProfileView({ user, onUpdate, onChangePassword }) {
   const [passwordSuccess, setPasswordSuccess] = useState("");
 
   useEffect(() => {
-    fetch(`${BASE}/api/warehouses`)
+    fetch(`${BASE}/api/warehouses`, { headers: { ...getAuthHeaders(token) } })
       .then(r => r.json())
       .then(list => setWarehouses(list || []))
       .catch(() => setWarehouses([]));
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     if (user && user.userWarehouse) {
@@ -56,7 +56,7 @@ export default function ProfileView({ user, onUpdate, onChangePassword }) {
     try {
       const res = await fetch(`${BASE}/api/auth/update-profile`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders(token) },
         body: JSON.stringify({ id: user.id, name })
       });
       const result = await res.json();
@@ -79,7 +79,7 @@ export default function ProfileView({ user, onUpdate, onChangePassword }) {
         try {
           const res = await fetch(`${BASE}/api/auth/update-profile`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders(token) },
             body: JSON.stringify({ id: user.id, avatarUrl: reader.result })
           });
           const result = await res.json();
@@ -102,7 +102,7 @@ export default function ProfileView({ user, onUpdate, onChangePassword }) {
     try {
       const res = await fetch(`${BASE}/api/auth/update-profile`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders(token) },
         body: JSON.stringify({ id: user.id, userWarehouse: name || null })
       });
       const result = await res.json();
@@ -130,7 +130,7 @@ export default function ProfileView({ user, onUpdate, onChangePassword }) {
     try {
       const res = await fetch(`${BASE}/api/auth/change-password`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders(token) },
         body: JSON.stringify({ id: user.id, oldPassword, newPassword })
       });
       const result = await res.json();

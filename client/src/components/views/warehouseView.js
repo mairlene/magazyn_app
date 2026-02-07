@@ -5,7 +5,7 @@ import AppButton, { EditButton, DeleteButton, SaveButton, CancelButton } from '.
 import AddIcon from '@mui/icons-material/Add';
 import formatError from '../../utils/formatError';
 
-export default function WarehouseView({ onBack, setView, onSelectWarehouse }) {
+export default function WarehouseView({ onBack, setView, onSelectWarehouse, token = null }) {
   const [warehouses, setWarehouses] = useState([]);
   const [warehouseStats, setWarehouseStats] = useState({}); // { byId: { [id]: { productsCount, totalQty } }, byName: { [name]: { ... } } }
   const [loading, setLoading] = useState(true);
@@ -24,8 +24,10 @@ export default function WarehouseView({ onBack, setView, onSelectWarehouse }) {
     let mounted = true;
     (async () => {
       try {
-        // fetch warehouses and products in parallel
-        const [list, productsResp] = await Promise.all([getWarehouses(), getProductsDb()]);
+        // fetch warehouses and a safe page of products in parallel
+        const DEFAULT_PAGE = 1;
+        const DEFAULT_LIMIT = 100;
+        const [list, productsResp] = await Promise.all([getWarehouses(), getProductsDb(null, DEFAULT_PAGE, DEFAULT_LIMIT)]);
         const products = (productsResp && productsResp.products) || [];
         if (mounted) setWarehouses(list || []);
 
@@ -78,7 +80,7 @@ export default function WarehouseView({ onBack, setView, onSelectWarehouse }) {
     const id = deleteTarget.id;
     setDeletingId(id); setError(null);
     try {
-      const res = await fetch(`${BASE}/api/admin/delete-warehouse`, { method: 'POST', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+      const res = await fetch(`${BASE}/api/admin/delete-warehouse`, { method: 'POST', headers: { ...getAuthHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(body.error || 'Błąd usuwania magazynu');
@@ -117,7 +119,7 @@ export default function WarehouseView({ onBack, setView, onSelectWarehouse }) {
                     if (!name) return setError('Nazwa magazynu nie może być pusta');
                     setCreating(true); setError(null);
                     try {
-                      const res = await fetch(`${BASE}/api/admin/create-warehouse`, { method: 'POST', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+                      const res = await fetch(`${BASE}/api/admin/create-warehouse`, { method: 'POST', headers: { ...getAuthHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
                       const body = await res.json().catch(() => ({}));
                       if (!res.ok) {
                         setError(body.error || 'Błąd tworzenia magazynu');
@@ -184,7 +186,7 @@ export default function WarehouseView({ onBack, setView, onSelectWarehouse }) {
                           if (!name) return setError('Nazwa magazynu nie może być pusta');
                           setSavingId(w.id); setError(null);
                           try {
-                            const res = await fetch(`${BASE}/api/admin/update-warehouse`, { method: 'POST', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ id: w.id, newName: name }) });
+                            const res = await fetch(`${BASE}/api/admin/update-warehouse`, { method: 'POST', headers: { ...getAuthHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ id: w.id, newName: name }) });
                             const body = await res.json().catch(() => ({}));
                             if (!res.ok) {
                               if (res.status === 409 && body.conflict) {

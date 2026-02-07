@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getProductsDb, getProductStocks, getWarehouses, BASE } from '../../services/api';
+import { getProductsDb, getProductStocksDedup as getProductStocks, getWarehouses, BASE, getAuthHeaders } from '../../services/api';
 import aggregateProducts from '../common/aggregateProducts';
 import { useToast } from '../common/ToastContext';
 import ProductForm from '../forms/ProductForm';
 import ListItem from '../product/listItem';
 import Pagination from './pagination';
 
-// EditView: focused on search + form + filtered list.
-// Keeps "Dodaj produkt" (add form) and "Importuj z Excel" buttons.
-export default function EditView({ onBack, onRefresh, userId, onImportExcel, user, pendingEditId = null, pendingEditItem = null, clearPendingEdit = () => {} }) {
+// EditView: focused on form and filtered product list.
+export default function EditView({ onBack, onRefresh, userId, onImportExcel, user, pendingEditId = null, pendingEditItem = null, clearPendingEdit = () => {}, token = null }) {
   // rawProducts holds rows returned by getProductsDb(); we'll aggregate into `products`
   const [rawProducts, setRawProducts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -16,12 +15,12 @@ export default function EditView({ onBack, onRefresh, userId, onImportExcel, use
   const [editingId, setEditingId] = useState(null);
   const [editingImageUrl, setEditingImageUrl] = useState(null);
   const [stockRows, setStockRows] = useState([]);
-  // search removed from EditView UI per request
+  //
   const [types, setTypes] = useState([]);
   const [sizes, setSizes] = useState([]);
   const [sizeSuggestions, setSizeSuggestions] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
-  // showAddForm removed — Add/import buttons moved to productView
+  
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 60;
@@ -31,7 +30,7 @@ export default function EditView({ onBack, onRefresh, userId, onImportExcel, use
   const fetchProducts = async () => {
     try {
       setLoading(true);
-  const data = await getProductsDb();
+  const data = await getProductsDb(null, 1, itemsPerPage);
   const list = data.products || [];
   setRawProducts(list);
     } catch (err) {
@@ -61,7 +60,7 @@ export default function EditView({ onBack, onRefresh, userId, onImportExcel, use
     } catch (e) {}
   }, [products]);
 
-  // If navigation requested opening Add form — handled in ProductView now
+  
 
   // support opening for a pending id/item
   useEffect(() => {
@@ -115,6 +114,7 @@ export default function EditView({ onBack, onRefresh, userId, onImportExcel, use
   const paginated = filtered.slice((currentPage - 1) * itemsPerPage, (currentPage - 1) * itemsPerPage + itemsPerPage);
 
   const handleEdit = async (product, preloadedStocks = null) => {
+    console.warn('[EditView] handleEdit -> opening editor for product', { id: product?.id, imageThumb: product?.imageThumb, imageUrl: product?.imageUrl });
     setEditingId(product.id);
     setForm({ Nazwa: product.name || product.Nazwa || '', Rozmiar: product.size || product.Rozmiar || '', Typ: product.type || product.Typ || '' });
     setEditingImageUrl(product.imageThumb || product.imageUrl || null);
@@ -142,6 +142,8 @@ export default function EditView({ onBack, onRefresh, userId, onImportExcel, use
     setEditingId(null);
     setForm({ Nazwa: '', Rozmiar: '', Typ: '' });
     setStockRows([]);
+    try { setCurrentPage(1); } catch (_) {}
+    try { fetchProducts(); } catch (_) {}
   };
 
   // Called by ProductForm when editing an existing product
@@ -153,7 +155,7 @@ export default function EditView({ onBack, onRefresh, userId, onImportExcel, use
       if (stockRows !== null && stockRows !== undefined) payload.stocks = (stockRows || []).map(r => ({ warehouseId: r.warehouseId || null, warehouseName: r.warehouseName || '', quantity: Number(r.quantity) || 0 }));
 
       const url = `${BASE || ''}/api/products/${editingId}`;
-      const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAuthHeaders(token) }, body: JSON.stringify(payload) });
       if (!res.ok) {
         // try to parse json body first, fall back to text
         let body = null;
@@ -161,7 +163,7 @@ export default function EditView({ onBack, onRefresh, userId, onImportExcel, use
         const errMsg = (body && body.error) ? body.error : (typeof body === 'string' ? body : `HTTP ${res.status}`);
 
         // If server reports a conflict / duplicate product in warehouse, show a clear toast
-        if (res.status === 409 || /already exists|już istnieje|produkt już istnieje/i.test(String(errMsg || ''))) {
+        if (res.status === 409) {
           showToast(String(errMsg || 'Taki produkt już istnieje w wybranym magazynie'), { type: 'error', timeout: 5000 });
           // keep the edit form open so user can fix the data
           return false;
@@ -190,7 +192,7 @@ export default function EditView({ onBack, onRefresh, userId, onImportExcel, use
     }
   };
 
-  // Add product flow is now available in ProductView; removed from EditView
+  
 
   return (
     <div className="bg-[#f5f6fa] min-h-screen p-4 rounded-xl shadow-md">
@@ -223,7 +225,7 @@ export default function EditView({ onBack, onRefresh, userId, onImportExcel, use
         )}
       </div>
 
-          {/* Search / filter by type/name removed from EditView per request */}
+          {}
 
       <div className="mt-4">
         <div className="flex flex-col gap-2">

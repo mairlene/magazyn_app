@@ -3,8 +3,10 @@ import ProductsController from './ProductsController';
 import SharedListContainer from './SharedListContainer';
 import ProductForm from '../../forms/ProductForm';
 import { useToast } from '../../common/ToastContext';
-import { BASE, getProductStocks, getAuthHeaders } from '../../../services/api';
+import { BASE, getAuthHeaders } from '../../../services/api';
 import { addProduct, updateProduct } from './api';
+import useSession from '../../../hooks/useSession';
+import { getProductStocksDedup as getProductStocks } from '../../../services/api';
 import ProductFilterBar from '../../common/ProductFilterBar';
 import ProductOptionsBar from '../../common/ProductOptionsBar';
 import Pagination from '../pagination';
@@ -50,6 +52,7 @@ function PendingEditHandler({ pendingEditId, pendingEditItem, items = [], onOpen
 }
 
 export default function ProductNewView({ user, setView, pendingEditId = null, pendingEditItem = null, clearPendingEdit = () => {} }) {
+  const { token } = useSession();
   const [editing, setEditing] = useState(null);
   const [editForm, setEditForm] = useState({ Nazwa: '', Rozmiar: '', Typ: '' });
   const [stockRows, setStockRows] = useState([]);
@@ -154,11 +157,12 @@ export default function ProductNewView({ user, setView, pendingEditId = null, pe
                   onFilterChange={(f) => setFilter(f)}
                   stockRows={stockRows}
                   setStockRows={setStockRows}
+                  canAdd={editing?.isNew}
                   // choose handler based on whether we're adding or editing
                   onAddProduct={async (payload) => {
                     try {
                       // payload ready for add
-                      const res = await addProduct(payload);
+                      const res = await addProduct(payload, token);
                       if (!res.ok) {
                         const errMsg = (res.body && (res.body.error || res.body.message)) ? (res.body.error || res.body.message) : (typeof res.body === 'string' ? res.body : `HTTP ${res.status}`);
                         if (res.status === 409 || /already exists|już istnieje|produkt już istnieje/i.test(String(errMsg || ''))) {
@@ -242,7 +246,7 @@ export default function ProductNewView({ user, setView, pendingEditId = null, pe
                           }
                           // debug final payload
                           // finalPayload prepared
-                          const res = await updateProduct(editing.id, finalPayload);
+                          const res = await updateProduct(editing.id, finalPayload, token);
                       if (!res.ok) {
                         const errMsg = (res.body && (res.body.error || res.body.message)) ? (res.body.error || res.body.message) : (typeof res.body === 'string' ? res.body : `HTTP ${res.status}`);
                         if (res.status === 409 || /already exists|już istnieje|produkt już istnieje/i.test(String(errMsg || ''))) {
@@ -273,7 +277,15 @@ export default function ProductNewView({ user, setView, pendingEditId = null, pe
                       return false;
                     }
                   }}
-                  onCancelEdit={() => setEditing(null)}
+                  onCancelEdit={async () => {
+                    try { setFilter({ Nazwa: '', Rozmiar: '', Typ: '' }); } catch (_) {}
+                    try { setAvailability('all'); } catch (_) {}
+                    try { setPage(1); } catch (_) {}
+                    try { await refresh(); } catch (_) {}
+                    setEditing(null);
+                    setEditForm({ Nazwa: '', Rozmiar: '', Typ: '' });
+                    setStockRows([]);
+                  }}
                   isEditing={!editing?.isNew}
                   editingId={editing?.id}
                 />
@@ -284,6 +296,7 @@ export default function ProductNewView({ user, setView, pendingEditId = null, pe
             viewMode={viewMode}
             toggleViewMode={toggleViewMode}
             onEdit={async (p) => {
+              console.warn('[ProductNewView] onEdit -> opening editor for product', { id: p?.id, imageThumb: p?.imageThumb, imageUrl: p?.imageUrl });
               setEditing(p);
               setOriginalProduct(p);
               setEditForm({ Nazwa: p.name || p.Nazwa || '', Rozmiar: p.size || p.Rozmiar || '', Typ: p.type || p.Typ || '' });
@@ -362,7 +375,7 @@ export default function ProductNewView({ user, setView, pendingEditId = null, pe
                     setDeleteLoading(true);
                     try {
                       const url = `${BASE || ''}/api/products/${deleteTarget.id}`;
-                      const res = await fetch(url, { method: 'DELETE', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() } });
+                      const res = await fetch(url, { method: 'DELETE', headers: { 'Content-Type': 'application/json', ...getAuthHeaders(token) } });
                       if (!res.ok) {
                         const text = await res.text().catch(() => null);
                         console.error('[ProductNewView] delete failed', res.status, text);

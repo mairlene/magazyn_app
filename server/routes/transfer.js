@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const logger = require('../lib/logger');
 // const { authMiddleware } = require('../middleware/auth');
 
 // POST /api/transfer
@@ -101,8 +102,8 @@ router.post('/', async (req, res) => {
     }
     res.json({ success: true });
   } catch (err) {
-    console.error('[TRANSFER] Error:', err);
-    if (err && err.stack) console.error('[TRANSFER] Error stack:', err.stack);
+    logger.error('[TRANSFER] Error:', err);
+    if (err && err.stack) logger.error('[TRANSFER] Error stack:', err.stack);
     res.status(500).json({ error: 'Server error', details: err.message });
   }
 });

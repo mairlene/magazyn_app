@@ -4,6 +4,8 @@ const logger = require('../lib/logger');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { authMiddleware } = require('../middleware/auth');
+const fs = require('fs');
+const path = require('path');
 
 // POST /api/products/delete
 // Expect JSON body: { productId }
@@ -38,6 +40,38 @@ router.post('/', authMiddleware, async (req, res) => {
       await tx.product.delete({ where: { id } });
     });
 
+    // After product was removed from DB, attempt to remove image files if they are not
+    // referenced by any other product. Protect against accidental deletion by ensuring
+    // the paths look like uploads (start with '/uploads/').
+    try {
+      const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
+      const candidateUrls = [];
+      if (product && product.imageUrl) candidateUrls.push(product.imageUrl);
+      if (product && product.imageThumb) candidateUrls.push(product.imageThumb);
+      for (const url of candidateUrls) {
+        if (!url || typeof url !== 'string') continue;
+        if (!url.startsWith('/uploads/')) continue;
+        // check if other products reference the same url
+        const count = await prisma.product.count({ where: { AND: [ { id: { not: id } }, { OR: [ { imageUrl: url }, { imageThumb: url } ] } ] } });
+        if (count > 0) {
+          logger.info('[UPLOAD CLEAN] not removing file still referenced by other products', url);
+          continue;
+        }
+        const filename = url.replace('/uploads/', '');
+        const fp = path.join(uploadDir, filename);
+        try {
+          if (fs.existsSync(fp)) {
+            fs.unlinkSync(fp);
+            logger.info('[UPLOAD CLEAN] removed orphan file', fp);
+          }
+        } catch (e) {
+          logger.warn('[UPLOAD CLEAN] failed to remove file', fp, e && e.message);
+        }
+      }
+    } catch (e) {
+      logger.warn('[UPLOAD CLEAN] cleanup-after-delete error', e && e.message);
+    }
+
     logger.warn('[API DELETE PRODUCT] deleted product', id, 'stocksRemoved=', stocks.length, 'byUser=', userId);
     return res.json({ success: true, removedStocks: stocks.length });
   } catch (err) {
@@ -67,6 +101,37 @@ router.delete('/:id', authMiddleware, async (req, res) => {
       await tx.stock.deleteMany({ where: { productId: id } });
       await tx.product.delete({ where: { id } });
     });
+
+    // After successful delete, attempt upload cleanup for any files that
+    // belonged to the removed product and are not referenced by other products.
+    try {
+      const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
+      const candidateUrls = [];
+      if (product && product.imageUrl) candidateUrls.push(product.imageUrl);
+      if (product && product.imageThumb) candidateUrls.push(product.imageThumb);
+      for (const url of candidateUrls) {
+        if (!url || typeof url !== 'string') continue;
+        if (!url.startsWith('/uploads/')) continue;
+        // check if other products reference the same url
+        const count = await prisma.product.count({ where: { AND: [ { id: { not: id } }, { OR: [ { imageUrl: url }, { imageThumb: url } ] } ] } });
+        if (count > 0) {
+          logger.info('[UPLOAD CLEAN] not removing file still referenced by other products', url);
+          continue;
+        }
+        const filename = url.replace('/uploads/', '');
+        const fp = path.join(uploadDir, filename);
+        try {
+          if (fs.existsSync(fp)) {
+            fs.unlinkSync(fp);
+            logger.info('[UPLOAD CLEAN] removed orphan file', fp);
+          }
+        } catch (e) {
+          logger.warn('[UPLOAD CLEAN] failed to remove file', fp, e && e.message);
+        }
+      }
+    } catch (e) {
+      logger.warn('[UPLOAD CLEAN] cleanup-after-delete error', e && e.message);
+    }
 
     logger.warn('[API DELETE PRODUCT] deleted product', id, 'stocksRemoved=', stocks.length, 'byUser=', userId);
     return res.json({ success: true, removedStocks: stocks.length });

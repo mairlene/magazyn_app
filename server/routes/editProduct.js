@@ -3,6 +3,7 @@ const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
 const { authMiddleware } = require('../middleware/auth');
 const prisma = new PrismaClient();
+const logger = require('../lib/logger');
 
 // PUT /api/products/:id
 // Require auth for edits so we can trust req.user.id when logging stock changes
@@ -92,8 +93,7 @@ router.put("/:id", authMiddleware, async (req, res) => {
     }
     if (imageUrl !== undefined) productUpdate.imageUrl = imageUrl;
     if (imageThumb !== undefined) productUpdate.imageThumb = imageThumb;
-    // if imageUrl provided but no imageThumb specified, clear thumbnail so UI can refresh
-    if (imageUrl !== undefined && imageThumb === undefined) productUpdate.imageThumb = null;
+    // Keep existing thumbnail unless the client explicitly sets `imageThumb`
 
     // If client provided `stocks` array, replace all stock rows for this product with the provided list
     const incomingStocks = Array.isArray(req.body.stocks) ? req.body.stocks : null;
@@ -204,7 +204,7 @@ router.put("/:id", authMiddleware, async (req, res) => {
     // Nothing to change
     return res.json({ success: true, product: existingProduct });
   } catch (e) {
-    console.error('[EDIT PRODUCT] Error:', e && e.stack ? e.stack : e);
+    logger.error('[EDIT PRODUCT] Error:', e && e.stack ? e.stack : e);
     res.status(500).json({ error: 'Error editing product' });
   }
 });

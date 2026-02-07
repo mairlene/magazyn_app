@@ -216,7 +216,7 @@ export default function ProductCard({
           )}
         </div>
       )}
-      {/* checkbox intentionally removed from UI (mass actions handled elsewhere) */}
+      {/* Checkbox omitted — mass actions handled elsewhere */}
       {viewMode === 'list' ? (
         // List layout: top badges row, then a two-row content area where the left thumbnail spans middle+bottom rows.
   <div className="w-full mx-auto py-2 px-2 md:px-3" style={{ maxWidth: 900, minHeight: 72 }}>

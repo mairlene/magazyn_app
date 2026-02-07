@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { resolveImageUrl, getProductStocks } from '../../services/api';
+import { resolveImageUrl, getProductStocksDedup as getProductStocks } from '../../services/api';
 import Modal from '../common/Modal';
 import HistoryList from './HistoryList';
 import { EditButton } from '../buttons/button';

@@ -23,7 +23,7 @@ button, input, select, textarea {
   .p-4 { padding: 1rem; }
 }
 
-/* Removed rotate-warning styles (previously hid app in portrait). */
+/* Rotate-warning styles omitted; app is responsive in portrait. */
 
 /* UI helpers used by product action buttons */
 .ui-action-btn {
@@ -47,7 +47,5 @@ button, input, select, textarea {
   justify-content: center;
 }
 
-/* Mobile-specific action button tweaks were removed here in favor of
-   component-scoped button styling (see client/src/components/buttons).
-   Keep only base helpers above; button label visibility and padding
-   are now controlled by the AppButton component. */
+/* Component-scoped button styling lives in client/src/components/buttons;
+  keep only base helpers here. */

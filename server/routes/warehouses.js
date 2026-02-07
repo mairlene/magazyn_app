@@ -2,13 +2,14 @@ const express = require("express");
 const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const logger = require('../lib/logger');
 
 router.get("/", async (_req, res) => {
   try {
     const list = await prisma.warehouse.findMany({ orderBy: { name: "asc" } });
     res.json(list);
   } catch (e) {
-    console.error(e);
+    logger.error('[WAREHOUSES] Error fetching list:', e);
     res.status(500).json({ error: "Błąd pobierania magazynów" });
   }
 });
@@ -35,7 +36,7 @@ router.delete('/:id', async (req, res) => {
     await prisma.warehouse.delete({ where: { id } });
     res.json({ success: true });
   } catch (err) {
-    console.error('[WAREHOUSES] delete error:', err);
+    logger.error('[WAREHOUSES] delete error:', err);
     res.status(500).json({ error: 'Błąd usuwania magazynu' });
   }
 });

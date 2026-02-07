@@ -15,12 +15,14 @@ export function buildUrl(path) {
 // Minimal: do not print runtime BASE information in console.
 
 // Helper: include Authorization header when a token is present in localStorage
-export function getAuthHeaders() {
+// Get auth headers. Prefer an explicit `token` argument; fall back to reading
+// from localStorage for backward compatibility. Avoids sprinkling
+// localStorage access across the codebase and allows callers to provide
+// a token from `useSession`.
+export function getAuthHeaders(token) {
   if (typeof window === 'undefined') return {};
-  const token = localStorage.getItem('token');
-  // Debug: show whether a token exists and a masked preview (do not print full token)
-  // do not log token presence in console (sensitive and verbose)
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  const t = token || (() => { try { return localStorage.getItem('token'); } catch (_) { return null; } })();
+  return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
 export async function getWarehouses() {
@@ -65,12 +67,53 @@ export function invalidateWarehousesCache() {
   getWarehouses._promise = null;
 }
 
-export async function getProductsDb(warehouseId) {
-  const query = warehouseId ? '?warehouseId=' + encodeURIComponent(warehouseId) : '';
-  const url = buildUrl('/api/products-db' + query);
+export async function getProductsDb(warehouseId, page, limit, options = {}) {
+  // Cancel previous in-flight products request to avoid spamming the server
+  if (typeof window !== 'undefined') {
+    try {
+      if (!getProductsDb._lastController) getProductsDb._lastController = null;
+      if (getProductsDb._lastController) {
+        try { getProductsDb._lastController.abort(); } catch (e) {}
+        getProductsDb._lastController = null;
+      }
+      getProductsDb._lastController = new AbortController();
+    } catch (e) {
+      // AbortController might not be available in some environments; ignore
+      getProductsDb._lastController = null;
+    }
+  }
+  const params = new URLSearchParams();
+  if (warehouseId) params.set('warehouseId', warehouseId);
+  if (limit) params.set('limit', String(limit));
+  // options may include q, sort, type, availability
+  const q = options.q || options.q === '' ? options.q : null;
+  const sort = options.sort || null;
+  const type = options.type || null;
+  const availability = options.availability || null;
+  if (q) params.set('q', q);
+  if (sort) params.set('sort', sort);
+  if (type) params.set('type', type);
+  if (availability) params.set('availability', availability);
+  // prefer path-based page URLs for clarity (e.g. /api/products-db/page/2)
+  const query = params.toString() ? ('?' + params.toString()) : '';
+  const basePath = page ? `/api/products-db/page/${encodeURIComponent(page)}` : '/api/products-db';
+  const url = buildUrl(basePath + query);
   // fetching products DB
   const headers = getAuthHeaders();
-  const r = await fetch(url, { headers });
+  const signal = (getProductsDb._lastController && getProductsDb._lastController.signal) ? getProductsDb._lastController.signal : undefined;
+  let r;
+  try {
+    r = await fetch(url, { headers, signal });
+  } catch (e) {
+    // If the request was aborted, return null so callers can ignore the result
+    if (e && (e.name === 'AbortError' || e.code === 'ERR_ABORTED')) return null;
+    throw e;
+  } finally {
+    // clear controller if it matches the one used for this request
+    try {
+      if (getProductsDb._lastController && getProductsDb._lastController.signal === signal) getProductsDb._lastController = null;
+    } catch (e) {}
+  }
   // check response status programmatically
   if (!r.ok) throw new Error("Błąd pobierania produktów z bazy");
   const data = await r.json();
@@ -127,6 +170,27 @@ export async function getProductStocks(productId) {
     throw new Error('Expected JSON response for stocks but got ' + contentType + ' — ' + text.slice(0, 300));
   }
   return JSON.parse(text);
+}
+
+// Keep a short-lived map of inflight requests to avoid spamming the same
+// endpoint when many components request the same product stocks at once.
+const _inflightStocks = {};
+
+export async function getProductStocksDedup(productId, { force = false } = {}) {
+  if (!productId) throw new Error('Missing productId');
+  if (!force && _inflightStocks[productId]) return _inflightStocks[productId];
+
+  _inflightStocks[productId] = (async () => {
+    try {
+      const res = await getProductStocks(productId);
+      return res;
+    } finally {
+      // clear entry regardless of success/failure so future calls can retry
+      delete _inflightStocks[productId];
+    }
+  })();
+
+  return _inflightStocks[productId];
 }
 
 // Fetch stock change history for a product (returns { success, history, count } or throws)

@@ -2,6 +2,26 @@ import React from "react";
 import UserProfileMenu from "./userProfileMenu";
 
 export default function Header({ view, setView, user, onLogout, selectedWarehouseName, onOpenSearchWithWarehouse }) {
+  const ACTION_MAP = {
+    profile: 'profile',
+    archive: 'archive',
+    adminPanel: 'adminPanel',
+    userActions: 'userActions',
+    warehouses: 'warehouses',
+    types: 'typesView',
+    products: 'productNew',
+    edit: 'edit',
+  };
+
+  const handleMenuSelect = (key) => {
+    if (key === 'logout') {
+      if (typeof onLogout === 'function') onLogout();
+      return;
+    }
+    const v = ACTION_MAP[key];
+    if (v) setView(v);
+  };
+
   return (
     <div className="bg-gradient-to-r from-[#2a3b6e] to-[#e5e7eb] shadow flex items-center justify-between px-4 md:px-8 py-5 mb-6 rounded-b-xl relative">
       <div className="flex items-center gap-4">
@@ -9,7 +29,7 @@ export default function Header({ view, setView, user, onLogout, selectedWarehous
           className="flex items-center gap-4 cursor-pointer"
           role="button"
           tabIndex={0}
-          aria-label="Otwórz panel akcji"
+          aria-label="Open action panel"
           onClick={() => { setView('actionView'); }}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setView('actionView'); }}
         >
@@ -18,23 +38,13 @@ export default function Header({ view, setView, user, onLogout, selectedWarehous
           </div>
           <span className="inline text-l md:text-2xl font-bold text-white tracking-wide">Magazyn app</span>
         </div>
-</div>
-      <div>
-      {/* Prawa sekcja: awatar użytkownika */}
-          <div className="flex items-center ml-2 md:ml-6 gap-3">
-        <UserProfileMenu user={user} onSelect={key => {
-          if (key === 'profile') setView('profile');
-          if (key === 'archive') setView('archive');
-          if (key === 'adminPanel') setView('adminPanel');
-          if (key === 'userActions') setView('userActions');
-          if (key === 'warehouses') setView('warehouses');
-          if (key === 'types') setView('typesView');
-          if (key === 'products') setView('productNew');
-          if (key === 'edit') setView('edit');
-          if (key === 'logout') onLogout();
-        }} />
       </div>
-    </div>
+      <div>
+        {/* Right section: user avatar and menu */}
+        <div className="flex items-center ml-2 md:ml-6 gap-3">
+          <UserProfileMenu user={user} onSelect={handleMenuSelect} />
+        </div>
+      </div>
     </div>
   );
 }

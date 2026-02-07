@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BASE, resolveImageUrl } from '../../services/api';
+import { BASE, resolveImageUrl, getAuthHeaders } from '../../services/api';
 import VerticalAlignBottomOutlinedIcon from '@mui/icons-material/VerticalAlignBottomOutlined';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import EditNoteOutlinedIcon from '@mui/icons-material/EditNoteOutlined';
@@ -65,7 +65,7 @@ function ActionIcon({ type }) {
   }
 }
 
-export default function UserActionsView() {
+export default function UserActionsView({ token = null }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [noteModal, setNoteModal] = useState(null);
@@ -78,7 +78,7 @@ export default function UserActionsView() {
     async function load() {
       setLoading(true);
       try {
-        const res = await fetch(`${BASE}/api/user-actions?page=${page}&limit=${limit}`);
+        const res = await fetch(`${BASE}/api/user-actions?page=${page}&limit=${limit}`, { headers: { ...getAuthHeaders(token) } });
         const j = await res.json();
         if (j && j.success && Array.isArray(j.items)) {
           setItems(prev => page === 1 ? j.items : [...prev, ...j.items]);
@@ -94,7 +94,7 @@ export default function UserActionsView() {
     }
     load();
     return () => { cancelled = true; };
-  }, [page, limit]);
+  }, [page, limit, token]);
 
   return (
     <div className="w-full px-2 md:px-4 lg:px-6 py-8">

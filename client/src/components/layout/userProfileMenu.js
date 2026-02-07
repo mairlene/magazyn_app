@@ -28,7 +28,7 @@ export default function UserProfileMenu({ user, onSelect }) {
       <button
         className="flex items-center gap-2 bg-[#e5e7eb] rounded-full px-3 py-1 shadow hover:bg-[#d1d5db] transition"
         onClick={() => setMenuOpen((open) => !open)}
-        aria-label="Menu użytkownika"
+          aria-label="Menu użytkownika"
       >
         <img
           src={user?.avatarUrl || "https://ui-avatars.com/api/?name=" + (user?.name || "U")}
